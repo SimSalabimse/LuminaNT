@@ -261,6 +261,137 @@ export function openRiskBySportOption(
   };
 }
 
+/** P2: sport × status open-risk heatmap */
+export function riskHeatmapOption(
+  matrix: {
+    sports: string[];
+    statuses: string[];
+    cells: Array<{ sport: string; status: string; stake: number; n: number }>;
+  }
+): EChartsOption {
+  if (!matrix.cells.length) {
+    return {
+      title: {
+        text: "No open risk",
+        left: "center",
+        top: "middle",
+        textStyle: { color: chartText.empty, fontSize: 13 },
+      },
+    };
+  }
+  const data = matrix.cells.map((c) => [
+    matrix.statuses.indexOf(c.status),
+    matrix.sports.indexOf(c.sport),
+    +c.stake.toFixed(2),
+  ]);
+  const maxS = Math.max(...matrix.cells.map((c) => c.stake), 1);
+  return {
+    backgroundColor: "transparent",
+    tooltip: {
+      ...tooltipBase,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      formatter: (p: any) => {
+        const d = p?.data as number[] | undefined;
+        if (!d) return "";
+        const status = matrix.statuses[d[0]] || "";
+        const sport = matrix.sports[d[1]] || "";
+        return `<b>${sport}</b> · ${status}<br/>${fmt2(d[2])} NOK`;
+      },
+    },
+    grid: { left: 90, right: 24, top: 16, bottom: 40 },
+    xAxis: {
+      type: "category",
+      data: matrix.statuses,
+      axisLabel: { ...axisLabel, fontSize: 10 },
+      splitArea: { show: true },
+    },
+    yAxis: {
+      type: "category",
+      data: matrix.sports,
+      axisLabel: { ...axisLabel, width: 80, overflow: "truncate" },
+      splitArea: { show: true },
+    },
+    visualMap: {
+      min: 0,
+      max: maxS,
+      calculable: false,
+      orient: "horizontal",
+      left: "center",
+      bottom: 0,
+      inRange: { color: ["#1a2332", "#C9A227"] },
+      textStyle: { color: chartText.muted, fontSize: 10 },
+    },
+    series: [
+      {
+        type: "heatmap",
+        data,
+        label: { show: true, color: chartText.muted, fontSize: 10, formatter: (p: unknown) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const v = (p as any)?.data?.[2];
+          return v ? fmt2(Number(v)) : "";
+        }},
+        emphasis: { itemStyle: { shadowBlur: 6, shadowColor: "rgba(0,0,0,0.4)" } },
+      },
+    ],
+  };
+}
+
+/** P2: edge decay ROI by age bucket */
+export function edgeDecayOption(
+  rows: Array<{ bucket: string; n: number; roi: number; pl: number }>
+): EChartsOption {
+  if (!rows.length) {
+    return {
+      title: {
+        text: "No settled sample for edge decay",
+        left: "center",
+        top: "middle",
+        textStyle: { color: chartText.empty, fontSize: 12 },
+      },
+    };
+  }
+  return {
+    backgroundColor: "transparent",
+    grid: { left: 48, right: 16, top: 24, bottom: 28 },
+    tooltip: {
+      trigger: "axis",
+      ...tooltipBase,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      formatter: (params: any) => {
+        const p = Array.isArray(params) ? params[0] : params;
+        const i = p?.dataIndex ?? 0;
+        const r = rows[i];
+        if (!r) return "";
+        return `<b>${r.bucket}</b><br/>ROI ${(r.roi * 100).toFixed(1)}% · n=${r.n} · P/L ${fmt2(r.pl)}`;
+      },
+    },
+    xAxis: {
+      type: "category",
+      data: rows.map((r) => r.bucket),
+      axisLabel,
+    },
+    yAxis: {
+      type: "value",
+      axisLabel: {
+        ...axisLabel,
+        formatter: (v: number) => `${(v * 100).toFixed(0)}%`,
+      },
+      splitLine,
+    },
+    series: [
+      {
+        type: "line",
+        data: rows.map((r) => r.roi),
+        smooth: true,
+        symbolSize: 8,
+        lineStyle: { width: 2, color: "#C9A227" },
+        itemStyle: { color: "#C9A227" },
+        areaStyle: { color: "rgba(201,162,39,0.12)" },
+      },
+    ],
+  };
+}
+
 /** Colorful horizontal sport P/L bars for dashboard right rail */
 export function sportBreakdownOption(
   rows: BreakdownRow[],

@@ -16,6 +16,11 @@ import { Badge } from "@/components/ui/badge";
 import { useDataStore } from "@/stores/data-store";
 import { useAppStore } from "@/stores/app-store";
 import { isTauri, writeTextFile } from "@/lib/tauri";
+import {
+  extractSettleJson,
+  hasAmbiguousMatchError,
+  settleErrorMessages,
+} from "@/lib/settleJson";
 import { cn, formatNokPlain } from "@/lib/utils";
 
 export type SettleDraftRow = {
@@ -89,6 +94,7 @@ export function SettleDesk() {
   const [lastReview, setLastReview] = useState<Record<string, unknown> | null>(
     null
   );
+  const [lastSettleErrors, setLastSettleErrors] = useState<string[]>([]);
   const [autoFetch, setAutoFetch] = useState(true);
 
   const loadDraft = useCallback(async () => {
@@ -195,7 +201,9 @@ export function SettleDesk() {
     }
     setSubmitting(true);
     setLastReview(null);
+    setLastSettleErrors([]);
     try {
+      // Always bet_id-first — engine fail-closed on ambiguous match/selection
       const items = included.map((r) => ({
         bet_id: r.bet_id,
         outcome: r.outcome,
@@ -226,18 +234,36 @@ export function SettleDesk() {
         "--items-json",
         "inbox/_settle_items.json",
       ]);
-      pushLog(res.stdout?.slice(0, 800) || "");
-      try {
-        const start = (res.stdout || "").indexOf("{");
-        const parsed = JSON.parse(
-          start >= 0 ? res.stdout!.slice(start) : res.stdout || "{}"
-        );
-        setLastReview(parsed.review || parsed);
-        setToast(
-          `Settled ${parsed.settled?.length ?? included.length} · equity ${parsed.equity ?? "—"}`
-        );
-      } catch {
-        setToast("Settlement command finished");
+      pushLog(res.stdout?.slice(0, 1200) || "");
+      const parsed = extractSettleJson(res.stdout || "");
+      const errMsgs = settleErrorMessages(parsed);
+      setLastSettleErrors(errMsgs);
+      if (parsed) {
+        const review =
+          (parsed.review as Record<string, unknown> | undefined) || parsed;
+        setLastReview(review);
+        const nOk = Array.isArray(parsed.settled)
+          ? (parsed.settled as unknown[]).length
+          : 0;
+        if (errMsgs.length > 0) {
+          setToast(
+            `Settled ${nOk} · ${errMsgs.length} error(s)` +
+              (hasAmbiguousMatchError(errMsgs)
+                ? " · ambiguous match — use bet_id only"
+                : "")
+          );
+          if (hasAmbiguousMatchError(errMsgs)) {
+            setError(
+              "Ambiguous pending match — engine refused silent pick. Settle by bet_id only (desk already sends bet_id; check item without id in CLI/YAML)."
+            );
+          }
+        } else {
+          setToast(
+            `Settled ${nOk || included.length} · equity ${String(parsed.equity ?? "—")}`
+          );
+        }
+      } else {
+        setToast("Settlement command finished (could not parse JSON)");
       }
       await refresh({ runNtRefresh: true });
       await loadDraft();
@@ -258,7 +284,8 @@ export function SettleDesk() {
           </h3>
           <p className="text-[11px] text-muted-foreground mt-0.5 max-w-xl">
             Batch-settle pending bets with score, variance vs skill, and research
-            retro. Auto-fetch assists football where possible.
+            retro. Auto-fetch assists football where possible. Engine fail-closed
+            on ambiguous match without bet_id.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -337,6 +364,26 @@ export function SettleDesk() {
               Draft {new Date(draft.generated_at).toLocaleTimeString()}
             </span>
           )}
+        </div>
+      )}
+
+      {lastSettleErrors.length > 0 && (
+        <div className="rounded-xl border border-loss/30 bg-loss/10 px-3 py-2.5 space-y-1.5">
+          <div className="text-[11px] font-semibold text-loss uppercase tracking-wide">
+            Settlement errors ({lastSettleErrors.length})
+          </div>
+          {hasAmbiguousMatchError(lastSettleErrors) && (
+            <p className="text-[12px] text-foreground/90">
+              Ambiguous match — engine will not pick a ticket silently. Use{" "}
+              <span className="font-mono">bet_id</span> only (desk rows already
+              include it).
+            </p>
+          )}
+          <ul className="text-[11px] font-mono text-muted-foreground space-y-0.5 max-h-28 overflow-y-auto">
+            {lastSettleErrors.map((m, i) => (
+              <li key={i}>{m}</li>
+            ))}
+          </ul>
         </div>
       )}
 

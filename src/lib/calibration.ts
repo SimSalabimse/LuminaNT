@@ -37,6 +37,15 @@ export type ReliabilityBin = {
   betIds: string[];
 };
 
+export type ForceReviewItem = {
+  dim: string;
+  key: string;
+  n: number;
+  bias: number;
+  label: string;
+  betIds: string[];
+};
+
 export type CalibrationReport = {
   n: number;
   brier: number | null;
@@ -52,6 +61,8 @@ export type CalibrationReport = {
   by_phase: Record<string, GroupMetrics>;
   by_grade: Record<string, GroupMetrics>;
   allBetIds: string[];
+  /** P1: bins/groups needing operator force-review */
+  force_review: ForceReviewItem[];
 };
 
 function num(v: unknown): number | null {
@@ -182,6 +193,7 @@ export function analyzeCalibration(raw: CalRow[] | undefined | null): Calibratio
     by_phase: {},
     by_grade: {},
     allBetIds: [],
+    force_review: [],
   };
   if (n === 0) return empty;
 
@@ -202,6 +214,18 @@ export function analyzeCalibration(raw: CalRow[] | undefined | null): Calibratio
     if (r.bet_id) allBetIds.push(String(r.bet_id));
   }
   const brier = brierSum / n;
+  const by_odds_band = groupMetrics(usable, "odds_band");
+  const by_sport = groupMetrics(usable, "sport");
+  const by_market = groupMetrics(usable, "market");
+  const by_phase = groupMetrics(usable, "phase");
+  const by_grade = groupMetrics(usable, "grade");
+  const bins = reliabilityBins(usable);
+  const force_review = collectForceReview({
+    bins,
+    by_odds_band,
+    by_sport,
+    by_market,
+  });
   return {
     n,
     brier: Math.round(brier * 1e5) / 1e5,
@@ -210,12 +234,58 @@ export function analyzeCalibration(raw: CalRow[] | undefined | null): Calibratio
     base_rate_wins: Math.round((base / n) * 1e4) / 1e4,
     bias_p_minus_y: Math.round((bias / n) * 1e4) / 1e4,
     interpretation: interpret(bias / n, brier, n),
-    reliability_bins: reliabilityBins(usable),
-    by_odds_band: groupMetrics(usable, "odds_band"),
-    by_sport: groupMetrics(usable, "sport"),
-    by_market: groupMetrics(usable, "market"),
-    by_phase: groupMetrics(usable, "phase"),
-    by_grade: groupMetrics(usable, "grade"),
+    reliability_bins: bins,
+    by_odds_band,
+    by_sport,
+    by_market,
+    by_phase,
+    by_grade,
     allBetIds,
+    force_review,
   };
+}
+
+/** P1: groups/bins with |bias| > 0.12 and n ≥ 5 need force-review. */
+function collectForceReview(input: {
+  bins: ReliabilityBin[];
+  by_odds_band: Record<string, GroupMetrics>;
+  by_sport: Record<string, GroupMetrics>;
+  by_market: Record<string, GroupMetrics>;
+}): ForceReviewItem[] {
+  const out: ForceReviewItem[] = [];
+  for (const b of input.bins) {
+    if (b.n >= 5 && b.gap != null && Math.abs(b.gap) > 0.12) {
+      out.push({
+        dim: "bin",
+        key: b.bin,
+        n: b.n,
+        bias: b.gap,
+        label:
+          b.gap > 0
+            ? `Bin ${b.bin}: overconfident (gap +${(b.gap * 100).toFixed(0)}pp)`
+            : `Bin ${b.bin}: underconfident (gap ${(b.gap * 100).toFixed(0)}pp)`,
+        betIds: b.betIds,
+      });
+    }
+  }
+  for (const [dim, map] of [
+    ["odds_band", input.by_odds_band],
+    ["sport", input.by_sport],
+    ["market", input.by_market],
+  ] as const) {
+    for (const [key, m] of Object.entries(map)) {
+      if (m.n >= 5 && Math.abs(m.bias) > 0.12) {
+        out.push({
+          dim,
+          key,
+          n: m.n,
+          bias: m.bias,
+          label: `${dim} ${key}: bias ${(m.bias * 100).toFixed(0)}pp (n=${m.n})`,
+          betIds: m.betIds,
+        });
+      }
+    }
+  }
+  out.sort((a, b) => Math.abs(b.bias) - Math.abs(a.bias));
+  return out.slice(0, 12);
 }

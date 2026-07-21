@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import ReactECharts from "echarts-for-react";
 import {
   ChevronDown,
   Flame,
@@ -26,11 +27,13 @@ import {
   calendarHeatmap,
   processHealthKpis,
   betIdsForDim,
+  edgeDecaySeries,
   type EquityDateMode,
 } from "@/lib/analytics";
 import {
   sportBreakdownOption,
   heatmapSparkOption,
+  edgeDecayOption,
 } from "@/lib/charts";
 import {
   formatNokPlain,
@@ -46,6 +49,7 @@ import {
   gateBadgeVariant,
   modeHeroClass,
   nextActionFor,
+  strandedRemainder,
 } from "@/lib/riskStatus";
 
 /** Compact KPI cell for Desk row */
@@ -139,6 +143,9 @@ export function Dashboard() {
     [snapshot]
   );
   const next = useMemo(() => nextActionFor(status), [status]);
+  const stranded = useMemo(() => strandedRemainder(status, 10), [status]);
+  const edgeDecay = useMemo(() => edgeDecaySeries(allBets), [allBets]);
+  const edgeDecayOpt = useMemo(() => edgeDecayOption(edgeDecay), [edgeDecay]);
 
   if (!snapshot) return null;
 
@@ -333,6 +340,11 @@ export function Dashboard() {
             <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
               {next.detail}
             </p>
+            {stranded.stranded && (
+              <div className="mt-2 rounded-lg border border-pending/35 bg-pending/10 px-3 py-2 text-[12px] text-pending font-medium">
+                {stranded.label} — cannot fund another NT ticket until settle frees risk.
+              </div>
+            )}
             {next.showUnfreeze && (
               <Button
                 size="default"
@@ -401,6 +413,25 @@ export function Dashboard() {
       </div>
 
       <OpenRiskConcentration />
+
+      {/* P2: Edge decay — realized ROI by settle lag */}
+      {edgeDecay.length > 0 && (
+        <div className="rounded-xl border border-white/[0.08] bg-card/50 p-4">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div>
+              <h3 className="text-sm font-semibold">Edge decay</h3>
+              <p className="text-[11px] text-muted-foreground">
+                Realized ROI by days from place → settle (settlement calendar)
+              </p>
+            </div>
+          </div>
+          <ReactECharts
+            option={edgeDecayOpt}
+            style={{ height: 160, width: "100%" }}
+            opts={{ renderer: "canvas" }}
+          />
+        </div>
+      )}
 
       {/* Open blotter + charts */}
       <div className="grid lg:grid-cols-12 gap-4">

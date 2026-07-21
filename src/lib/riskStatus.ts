@@ -252,6 +252,25 @@ export function nextActionFor(status: RiskStatus): {
   };
 }
 
+/**
+ * P1: Stranded remaining risk under NT min seat (cannot fund another ticket).
+ * leftover ∈ (0, minStake) with room left after open book.
+ */
+export function strandedRemainder(
+  status: RiskStatus,
+  minStake = 10
+): { stranded: boolean; amount: number; label: string } {
+  const rem = status.remaining;
+  if (rem > 0.5 && rem + 1e-9 < minStake) {
+    return {
+      stranded: true,
+      amount: rem,
+      label: `Stranded ${rem.toFixed(0)} NOK under ${minStake} min seat`,
+    };
+  }
+  return { stranded: false, amount: 0, label: "" };
+}
+
 /** Large size_mode chip classes for hero badges. */
 export function modeHeroClass(mode: SizeMode | string): string {
   const m = String(mode).toUpperCase();

@@ -1,8 +1,17 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Bet, DecisionRecord, EdgeRecord } from "@/types";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useDataStore } from "@/stores/data-store";
-import { cn, formatNokPlain, plColor, resultBadgeClass } from "@/lib/utils";
+import { useAppStore } from "@/stores/app-store";
+import {
+  cn,
+  formatNokPlain,
+  isOpenRisk,
+  plColor,
+  resultBadgeClass,
+  resultDisplayLabel,
+} from "@/lib/utils";
 import { marketFamilyLabel } from "@/lib/markets";
 import { isTauri, readTextFile } from "@/lib/tauri";
 
@@ -113,9 +122,35 @@ function StakeCell({
 /** Shared Case File body — used in dual-pane dock and modal */
 export function CaseFileContent({ bet }: { bet: Bet }) {
   const snapshot = useDataStore((s) => s.snapshot);
+  const allBets = useDataStore((s) => s.bets);
+  const setView = useAppStore((s) => s.setView);
+  const drillForensic = useDataStore((s) => s.drillForensic);
+  const setSelectedBetId = useDataStore((s) => s.setSelectedBetId);
   const [pack, setPack] = useState<Record<string, unknown> | null>(null);
   const [packError, setPackError] = useState<string | null>(null);
   const [packLoading, setPackLoading] = useState(false);
+
+  /** P2 bidirectional: related open risk on same match / sport for re-trigger */
+  const relatedOpen = useMemo(() => {
+    const matchKey = (bet.match || "").trim().toLowerCase();
+    const sportKey = (bet.sport || "").trim().toLowerCase();
+    const sameMatch: Bet[] = [];
+    const sameSportOpen: Bet[] = [];
+    for (const b of allBets) {
+      if (String(b.bet_id) === String(bet.bet_id)) continue;
+      if (!isOpenRisk(b.result)) continue;
+      const m = (b.match || "").trim().toLowerCase();
+      const s = (b.sport || "").trim().toLowerCase();
+      if (matchKey && m === matchKey) sameMatch.push(b);
+      else if (sportKey && s === sportKey) sameSportOpen.push(b);
+    }
+    // Cap sport peers so the panel stays scannable
+    return {
+      sameMatch,
+      sameSportOpen: sameSportOpen.slice(0, 8),
+      sportOpenCount: sameSportOpen.length,
+    };
+  }, [allBets, bet.bet_id, bet.match, bet.sport]);
 
   const dossier = useMemo(() => {
     const dec =
@@ -389,6 +424,172 @@ export function CaseFileContent({ bet }: { bet: Bet }) {
           );
         })()}
       </Section>
+
+      <Section title="2c · Deep-dive">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9"
+            onClick={() => {
+              drillForensic({
+                dim: "bet_id",
+                value: bet.bet_id,
+                label: bet.match,
+                betIds: [bet.bet_id],
+                filterPatch: {},
+                targetView: "bets",
+              });
+            }}
+          >
+            Ledger focus
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9"
+            onClick={() => {
+              drillForensic({
+                dim: "calibration",
+                value: bet.bet_id,
+                label: `Cal · ${bet.match}`,
+                betIds: [bet.bet_id],
+                filterPatch: {},
+                targetView: "calibration",
+              });
+              setView("calibration");
+            }}
+          >
+            Calibration
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9"
+            onClick={() => setView("shortlist")}
+          >
+            Shortlist
+          </Button>
+          {dossier.evidenceFile && (
+            <span className="text-[11px] font-mono text-muted-foreground self-center max-w-[220px] truncate" title={String(dossier.evidenceFile)}>
+              {String(dossier.evidenceFile).split(/[/\\]/).pop()}
+            </span>
+          )}
+        </div>
+      </Section>
+
+      {/* P2 bidirectional re-trigger: Case File → open-risk peers */}
+      {(relatedOpen.sameMatch.length > 0 ||
+        relatedOpen.sameSportOpen.length > 0 ||
+        isOpenRisk(bet.result)) && (
+        <Section title="2d · Related open risk">
+          <div className="flex flex-wrap gap-2 mb-2">
+            {relatedOpen.sameMatch.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-[11px]"
+                onClick={() => {
+                  const ids = relatedOpen.sameMatch.map((b) => b.bet_id);
+                  drillForensic({
+                    dim: "open_match",
+                    value: bet.match,
+                    label: `Open · ${bet.match}`,
+                    betIds: ids,
+                    filterPatch: {
+                      results: Array.from(
+                        new Set(relatedOpen.sameMatch.map((b) => b.result))
+                      ),
+                    },
+                    targetView: "bets",
+                  });
+                }}
+              >
+                Same match open ({relatedOpen.sameMatch.length})
+              </Button>
+            )}
+            {(relatedOpen.sportOpenCount > 0 || isOpenRisk(bet.result)) &&
+              bet.sport && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-[11px]"
+                  onClick={() => {
+                    const peers = allBets.filter(
+                      (b) =>
+                        isOpenRisk(b.result) &&
+                        (b.sport || "").trim().toLowerCase() ===
+                          (bet.sport || "").trim().toLowerCase()
+                    );
+                    drillForensic({
+                      dim: "open_sport",
+                      value: bet.sport || "",
+                      label: `Open risk · ${bet.sport}`,
+                      betIds: peers.map((b) => b.bet_id),
+                      filterPatch: {
+                        sports: [bet.sport || ""],
+                        results: Array.from(
+                          new Set(peers.map((b) => b.result).filter(Boolean))
+                        ),
+                      },
+                      targetView: "bets",
+                    });
+                    setView("dashboard");
+                  }}
+                >
+                  Sport open heatmap ({relatedOpen.sportOpenCount}
+                  {isOpenRisk(bet.result) ? "+self" : ""})
+                </Button>
+              )}
+          </div>
+          {relatedOpen.sameMatch.length === 0 &&
+            relatedOpen.sameSportOpen.length === 0 &&
+            isOpenRisk(bet.result) && (
+              <p className="text-[11px] text-muted-foreground">
+                This ticket is open — no other open peers on same match/sport.
+              </p>
+            )}
+          {relatedOpen.sameMatch.map((b) => (
+            <button
+              key={b.bet_id}
+              type="button"
+              className="w-full text-left text-xs border-b border-border/30 py-1.5 hover:bg-primary/10 rounded-md px-1.5 flex justify-between gap-2"
+              onClick={() => setSelectedBetId(b.bet_id)}
+              title="Open related Case File"
+            >
+              <span className="truncate">
+                <span className="text-pending mr-1.5">
+                  {resultDisplayLabel(b.result)}
+                </span>
+                {b.selection}
+              </span>
+              <span className="font-mono tabular-nums shrink-0">
+                {formatNokPlain(b.stake_nok)}
+              </span>
+            </button>
+          ))}
+          {relatedOpen.sameMatch.length === 0 &&
+            relatedOpen.sameSportOpen.slice(0, 4).map((b) => (
+              <button
+                key={b.bet_id}
+                type="button"
+                className="w-full text-left text-xs border-b border-border/30 py-1.5 hover:bg-primary/10 rounded-md px-1.5 flex justify-between gap-2"
+                onClick={() => setSelectedBetId(b.bet_id)}
+                title="Open related Case File"
+              >
+                <span className="truncate">
+                  <span className="text-muted-foreground mr-1.5">
+                    {b.match}
+                  </span>
+                  {b.selection}
+                </span>
+                <span className="font-mono tabular-nums shrink-0 text-pending">
+                  {formatNokPlain(b.stake_nok)}
+                </span>
+              </button>
+            ))}
+        </Section>
+      )}
 
       <Section title="3 · Evidence">
         <Row

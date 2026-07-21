@@ -19,8 +19,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDataStore } from "@/stores/data-store";
 import { useAppStore } from "@/stores/app-store";
-import { buildShortlistCards, sizeModeTone, type ShortlistCard } from "@/lib/capital";
+import { buildShortlistCards, type ShortlistCard } from "@/lib/capital";
 import { formatNokPlain, cn } from "@/lib/utils";
+import { deriveGateChips } from "@/lib/gateChips";
 import { deriveRiskStatus, modeBadgeVariant } from "@/lib/riskStatus";
 
 function StatusIcon({ status }: { status: ShortlistCard["status"] }) {
@@ -196,7 +197,6 @@ export function ShortlistBoard() {
           )}
         >
           {cards.map((c, idx) => {
-            const modeTone = sizeModeTone(c.sizeMode);
             const rationale = stakeRationale(c);
             const isOpen = expanded === c.id;
             const riskShare =
@@ -252,25 +252,30 @@ export function ShortlistBoard() {
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-1.5">
-                  {c.grade && (
-                    <Badge variant="outline" className="h-7 text-[11px]">
-                      Grade {c.grade}
-                    </Badge>
-                  )}
-                  {c.sizeMode && (
+                  {deriveGateChips({
+                    grade: c.grade,
+                    sizeMode: c.sizeMode,
+                    notes: c.notes,
+                    statusReason: c.statusReason,
+                  }).map((chip) => (
                     <Badge
+                      key={chip.id}
                       variant={
-                        modeTone === "loss"
-                          ? "warning"
-                          : modeTone === "pending"
-                            ? "accent"
-                            : "success"
+                        chip.tone === "ok"
+                          ? "success"
+                          : chip.tone === "warn"
+                            ? "warning"
+                            : chip.tone === "loss"
+                              ? "loss"
+                              : chip.tone === "primary"
+                                ? "default"
+                                : "secondary"
                       }
-                      className="h-7 text-[11px] font-bold"
+                      className="h-7 text-[11px] font-semibold"
                     >
-                      {c.sizeMode}
+                      {chip.label}
                     </Badge>
-                  )}
+                  ))}
                   {c.band && (
                     <Badge variant="secondary" className="h-7 text-[11px] font-mono">
                       {c.band}

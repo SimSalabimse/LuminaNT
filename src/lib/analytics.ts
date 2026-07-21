@@ -74,6 +74,7 @@ export function filterBets(bets: Bet[], f: BetFilters): Bet[] {
       if (q.startsWith("id:")) {
         return String(b.bet_id).toLowerCase() === q.slice(3).trim();
       }
+      // P2 full-text: multi-token AND across primary fields
       const hay = [
         b.bet_id,
         b.match,
@@ -81,6 +82,7 @@ export function filterBets(bets: Bet[], f: BetFilters): Bet[] {
         b.notes,
         b.sport,
         b.market_type,
+        b.market_family,
         b.phase,
         b.research_grade,
         b.source,
@@ -89,10 +91,96 @@ export function filterBets(bets: Bet[], f: BetFilters): Bet[] {
       ]
         .join(" ")
         .toLowerCase();
-      if (!hay.includes(q)) return false;
+      const tokens = q.split(/\s+/).filter((t) => t.length >= 2);
+      if (tokens.length === 0) return true;
+      if (!tokens.every((t) => hay.includes(t))) return false;
     }
     return true;
   });
+}
+
+/** P2: sport × status stake matrix for risk heatmap. */
+export function riskHeatmapMatrix(bets: Bet[]): {
+  sports: string[];
+  statuses: string[];
+  cells: Array<{ sport: string; status: string; stake: number; n: number; betIds: string[] }>;
+} {
+  const open = bets.filter((b) => isOpenRisk(b.result));
+  const map = new Map<string, { stake: number; n: number; betIds: string[] }>();
+  for (const b of open) {
+    const sport = (b.sport || "(unknown)").trim() || "(unknown)";
+    const status = (b.result || "Pending").trim() || "Pending";
+    const k = `${sport}\0${status}`;
+    const cur = map.get(k) || { stake: 0, n: 0, betIds: [] };
+    cur.stake += Number(b.stake_nok) || 0;
+    cur.n += 1;
+    cur.betIds.push(b.bet_id);
+    map.set(k, cur);
+  }
+  const sports = Array.from(new Set([...map.keys()].map((k) => k.split("\0")[0]))).sort();
+  const statuses = Array.from(new Set([...map.keys()].map((k) => k.split("\0")[1]))).sort();
+  const cells: Array<{
+    sport: string;
+    status: string;
+    stake: number;
+    n: number;
+    betIds: string[];
+  }> = [];
+  for (const [k, v] of map) {
+    const [sport, status] = k.split("\0");
+    cells.push({ sport, status, stake: v.stake, n: v.n, betIds: v.betIds });
+  }
+  return { sports, statuses, cells };
+}
+
+/**
+ * P2: Edge decay — mean realized ROI by days-from-place buckets for settled bets
+ * with recoverable EV or p_model in notes.
+ */
+export function edgeDecaySeries(
+  bets: Bet[]
+): Array<{ bucket: string; n: number; roi: number; pl: number }> {
+  const settled = bets.filter((b) => isSettled(b.result));
+  const buckets = new Map<string, { stake: number; pl: number; n: number }>();
+
+  for (const b of settled) {
+    const stake = Number(b.stake_nok) || 0;
+    const pl = Number(b.p_l_nok) || 0;
+    if (stake <= 0) continue;
+    // days between place (created_at/date) and settle (updated_at/date)
+    const place = (b.created_at || b.date || "").slice(0, 10);
+    const settle = settlementCalendarDay(b) || (b.updated_at || b.date || "").slice(0, 10);
+    let days = 0;
+    if (place && settle) {
+      const t0 = Date.parse(place);
+      const t1 = Date.parse(settle);
+      if (Number.isFinite(t0) && Number.isFinite(t1)) {
+        days = Math.max(0, Math.round((t1 - t0) / 86400000));
+      }
+    }
+    let bucket = "0d";
+    if (days >= 7) bucket = "7d+";
+    else if (days >= 3) bucket = "3-6d";
+    else if (days >= 1) bucket = "1-2d";
+    const cur = buckets.get(bucket) || { stake: 0, pl: 0, n: 0 };
+    cur.stake += stake;
+    cur.pl += pl;
+    cur.n += 1;
+    buckets.set(bucket, cur);
+  }
+
+  const order = ["0d", "1-2d", "3-6d", "7d+"];
+  return order
+    .filter((k) => buckets.has(k))
+    .map((k) => {
+      const v = buckets.get(k)!;
+      return {
+        bucket: k,
+        n: v.n,
+        pl: Math.round(v.pl * 100) / 100,
+        roi: v.stake > 0 ? Math.round((v.pl / v.stake) * 1000) / 1000 : 0,
+      };
+    });
 }
 
 /** Collect bet_ids for a dimension value (client-side grain aggregate). */

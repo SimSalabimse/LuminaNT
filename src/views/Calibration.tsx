@@ -417,6 +417,30 @@ export function CalibrationPanel() {
               What this means
             </Badge>
             <p className="text-sm leading-relaxed">{report.interpretation}</p>
+            {report.force_review.length > 0 && (
+              <div className="mt-3 rounded-xl border border-pending/35 bg-pending/10 px-3 py-2.5 space-y-1.5">
+                <div className="text-[11px] font-semibold text-pending uppercase tracking-wide">
+                  Force-review ({report.force_review.length})
+                </div>
+                <p className="text-[12px] text-muted-foreground">
+                  Groups/bins with |bias| &gt; 12pp and n ≥ 5 — check process before raising stakes.
+                </p>
+                <ul className="space-y-1">
+                  {report.force_review.slice(0, 6).map((f) => (
+                    <li key={`${f.dim}-${f.key}`}>
+                      <button
+                        type="button"
+                        className="text-[12px] text-left text-foreground hover:text-primary underline-offset-2 hover:underline"
+                        onClick={() => drill(f.label, f.betIds)}
+                        disabled={!f.betIds.length}
+                      >
+                        {f.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <p className="text-[11px] text-muted-foreground mt-2">
               Learning signal only — does not auto-change stakes. Process rules
               stay in the engine.

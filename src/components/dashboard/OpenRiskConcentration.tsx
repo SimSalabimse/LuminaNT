@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import ReactECharts from "echarts-for-react";
 import { useDataStore } from "@/stores/data-store";
-import { openRiskConcentration } from "@/lib/analytics";
-import { openRiskBySportOption } from "@/lib/charts";
+import { openRiskConcentration, riskHeatmapMatrix } from "@/lib/analytics";
+import { openRiskBySportOption, riskHeatmapOption } from "@/lib/charts";
 import { formatNokPlain, resultDisplayLabel, isOpenRisk } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 /**
  * Open-risk concentration — always visible on Desk.
@@ -12,37 +13,51 @@ import { Badge } from "@/components/ui/badge";
  */
 export function OpenRiskConcentration() {
   const allBets = useDataStore((s) => s.bets);
+  const filters = useDataStore((s) => s.filters);
+  const clearForensic = useDataStore((s) => s.clearForensic);
   const drillForensic = useDataStore((s) => s.drillForensic);
+  const [mode, setMode] = useState<"bars" | "heatmap">("heatmap");
+
+  const forensicActive =
+    (filters.betIds?.length || 0) > 0 || (filters.forensicTrail?.length || 0) > 0;
 
   const conc = useMemo(() => openRiskConcentration(allBets), [allBets]);
+  const matrix = useMemo(() => riskHeatmapMatrix(allBets), [allBets]);
   const chartOpt = useMemo(
-    () => openRiskBySportOption(conc.bySport),
-    [conc.bySport]
+    () =>
+      mode === "heatmap"
+        ? riskHeatmapOption(matrix)
+        : openRiskBySportOption(conc.bySport),
+    [mode, matrix, conc.bySport]
   );
 
-  const onSportClick = (sport: string) => {
+  const onSportClick = (sport: string, status?: string) => {
     const ids = allBets
       .filter(
         (b) =>
           isOpenRisk(b.result) &&
-          (b.sport || "(unknown)").trim() === sport
+          (b.sport || "(unknown)").trim() === sport &&
+          (status ? (b.result || "Pending").trim() === status : true)
       )
       .map((b) => b.bet_id);
+    const statusLabel = status ? ` · ${status}` : "";
     drillForensic({
-      dim: "open_sport",
-      value: sport,
-      label: `Open risk · ${sport}`,
+      dim: status ? "open_sport_status" : "open_sport",
+      value: status ? `${sport}|${status}` : sport,
+      label: `Open risk · ${sport}${statusLabel}`,
       betIds: ids,
       filterPatch: {
         sports: sport === "(unknown)" ? [] : [sport],
-        results: Array.from(
-          new Set(
-            allBets
-              .filter((b) => isOpenRisk(b.result))
-              .map((b) => b.result)
-              .filter(Boolean)
-          )
-        ),
+        results: status
+          ? [status]
+          : Array.from(
+              new Set(
+                allBets
+                  .filter((b) => isOpenRisk(b.result))
+                  .map((b) => b.result)
+                  .filter(Boolean)
+              )
+            ),
       },
       targetView: "bets",
     });
@@ -75,10 +90,42 @@ export function OpenRiskConcentration() {
             Open-risk concentration
           </h3>
           <p className="text-[11px] text-muted-foreground mt-0.5">
-            Pending + ConfirmedPlaced · stake by sport / match
+            Pending + ConfirmedPlaced · risk heatmap / sport bars
+            {forensicActive && (
+              <span className="text-primary"> · forensic grain active</span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-1.5">
+          <div className="flex rounded-lg border border-white/12 p-0.5 text-[11px]">
+            <button
+              type="button"
+              className={
+                mode === "heatmap"
+                  ? "px-2 py-1 rounded-md bg-primary text-primary-foreground"
+                  : "px-2 py-1 rounded-md text-muted-foreground"
+              }
+              onClick={() => setMode("heatmap")}
+            >
+              Heatmap
+            </button>
+            <button
+              type="button"
+              className={
+                mode === "bars"
+                  ? "px-2 py-1 rounded-md bg-primary text-primary-foreground"
+                  : "px-2 py-1 rounded-md text-muted-foreground"
+              }
+              onClick={() => setMode("bars")}
+            >
+              Bars
+            </button>
+          </div>
+          {forensicActive && (
+            <Button size="sm" variant="outline" className="h-8 text-[11px]" onClick={() => clearForensic()}>
+              Clear forensic
+            </Button>
+          )}
           <Badge variant="secondary" className="tabular-nums text-[10px] font-mono">
             {conc.n} open
           </Badge>
@@ -97,11 +144,25 @@ export function OpenRiskConcentration() {
           ) : (
             <ReactECharts
               option={chartOpt}
-              style={{ height: Math.max(160, conc.bySport.length * 36 + 40), width: "100%" }}
+              style={{
+                height:
+                  mode === "heatmap"
+                    ? Math.max(180, matrix.sports.length * 28 + 60)
+                    : Math.max(160, conc.bySport.length * 36 + 40),
+                width: "100%",
+              }}
               opts={{ renderer: "canvas" }}
               onEvents={{
-                click: (p: { name?: string }) => {
-                  if (p?.name) onSportClick(String(p.name));
+                click: (p: { name?: string; data?: number[] }) => {
+                  if (mode === "bars" && p?.name) {
+                    onSportClick(String(p.name));
+                    return;
+                  }
+                  if (mode === "heatmap" && Array.isArray(p?.data)) {
+                    const status = matrix.statuses[p.data[0]];
+                    const sport = matrix.sports[p.data[1]];
+                    if (sport) onSportClick(sport, status);
+                  }
                 },
               }}
             />

@@ -360,20 +360,32 @@ export function BetsExplorer() {
         </div>
       )}
 
-      {/* Search */}
+      {/* Search — P2 full-text: multi-token AND across ledger fields */}
       <div className="relative shrink-0 mb-3">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           data-shortcut="bets-search"
           className="pl-9 pr-16 font-mono text-sm h-10 rounded-xl bg-card/60"
-          placeholder="Search match, selection, notes, bet_id…"
+          placeholder="Full-text: tokens AND · id:BET123 · match, notes, grade…"
           value={filters.search}
           onChange={(e) => setFilters({ search: e.target.value })}
+          title="Multi-token AND search across match, selection, notes, sport, market, grade, phase, source. Prefix id: for exact bet_id."
         />
         <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
           <kbd className="kbd">/</kbd>
         </span>
       </div>
+      {filters.search.trim().split(/\s+/).filter((t) => t.length >= 2).length >
+        1 && (
+        <p className="text-[10px] text-muted-foreground -mt-2 mb-2 font-mono">
+          Full-text AND ·{" "}
+          {filters.search
+            .trim()
+            .split(/\s+/)
+            .filter((t) => t.length >= 2)
+            .join(" ∩ ")}
+        </p>
+      )}
 
       {showFilters && (
         <div className="rounded-xl border border-white/[0.08] bg-card p-4 space-y-3 shrink-0 mb-3">
