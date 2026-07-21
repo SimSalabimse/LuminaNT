@@ -1,0 +1,15 @@
+{
+  "match": "Example FC vs Sample United",
+  "selection": "Example FC DNB",
+  "p_model": 0.68,
+  "summary": "Home favorite with stable xG edge and full squad.",
+  "failure_modes": "Late injury to striker; extreme weather.",
+  "sources": [
+    {"url": "https://fbref.com/example", "takeaway": "xG for 1.8 vs 0.7 against"},
+    {"url": "https://transfermarkt.com/example", "takeaway": "No key absences"},
+    {"url": "https://sofascore.com/example", "takeaway": "Form WWDWW"},
+    {"url": "https://whoscored.com/example", "takeaway": "High shot quality"},
+    {"url": "https://flashscore.com/example", "takeaway": "H2H 3W in 5"},
+    {"url": "https://understat.com/example", "takeaway": "Underlying numbers stable"}
+  ]
+}

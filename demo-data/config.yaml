@@ -1,0 +1,195 @@
+# NT Betting Tracker — single source of numeric truth
+# Phase, risk caps, and stake bands change automatically via the phase engine.
+
+project:
+  name: nt-betting-tracker
+  currency: NOK
+  operator: Norsk Tipping Oddsen
+
+bankroll:
+  # Clean-restart era (2026-06-28). Full history kept under history/.
+  baseline_nok: 500.0
+  era_start: "2026-06-28"
+  # Equity = baseline + sum(settled P/L) over data/bets.csv
+  # data/bets.csv includes bankroll_archive_up_to_2026_07_01 + subsequent bets.
+  include_era_archive: true
+
+norsk_tipping:
+  min_stake_nok: 10.0
+  # Decimal odds only in this system
+  max_legs_in_combo: 3
+
+# Phase ladder v4 (2026-07-13) — see docs/PHASE_PLAN.md
+# Hybrid: equity ladder is primary; settled-count may unlock at most +1 phase if stable.
+# daily_risk = clamp(equity * daily_risk_pct, floor, ceil)  — recomputed every run.
+phases:
+  "1A":
+    label: Protect
+    enter_equity: 0
+    enter_settled: 0
+    stake_min: 10
+    stake_max: 12
+    max_bets_per_round: 3
+    max_doubles_per_round: 0
+    daily_risk_pct: 0.08
+    daily_risk_floor: 30
+    daily_risk_ceil: 42
+    next: "1B"
+  "1B":
+    label: Stabilize
+    enter_equity: 580
+    enter_settled: 60
+    stake_min: 10
+    stake_max: 15
+    max_bets_per_round: 4
+    max_doubles_per_round: 0   # no doubles until Phase 2
+    daily_risk_pct: 0.09
+    daily_risk_floor: 38
+    daily_risk_ceil: 52
+    next: "2"
+  "2":
+    label: Build
+    enter_equity: 750
+    enter_settled: 90
+    stake_min: 12
+    stake_max: 18
+    max_bets_per_round: 5
+    max_doubles_per_round: 1
+    daily_risk_pct: 0.10
+    daily_risk_floor: 50
+    daily_risk_ceil: 75
+    next: "3"
+  "3":
+    label: Expand
+    enter_equity: 1200
+    enter_settled: 130
+    stake_min: 15
+    stake_max: 28
+    max_bets_per_round: 6
+    max_doubles_per_round: 2
+    daily_risk_pct: 0.09
+    daily_risk_floor: 70
+    daily_risk_ceil: 140
+    next: "4"
+  "4":
+    label: Mature
+    enter_equity: 2500
+    enter_settled: 180
+    stake_min: 18
+    stake_max: 45
+    max_bets_per_round: 7
+    max_doubles_per_round: 2
+    daily_risk_pct: 0.07
+    daily_risk_floor: 100
+    daily_risk_ceil: 250
+    next: "5"
+  "5":
+    label: Scale
+    enter_equity: 5000
+    enter_settled: 250
+    stake_min: 20
+    stake_max: 70
+    max_bets_per_round: 8
+    max_doubles_per_round: 3
+    daily_risk_pct: 0.06
+    daily_risk_floor: 120
+    daily_risk_ceil: 400
+    next: null
+
+# Stability gates for count-unlock and demotion (see docs/PHASE_PLAN.md)
+phase_stability:
+  min_rolling_settled: 25
+  min_rolling_roi: 0.0          # count unlock only if rolling window not red
+  demote_if_rolling_roi_below: -0.10
+  demote_min_settled: 25
+  # Drop one phase if equity falls this far below peak end-of-day equity
+  demote_drawdown_pct_of_peak: 0.12
+
+risk:
+  # Kill-switch: no new bets if today's realized P/L <= -stop_day_loss_nok
+  # or open+planned risk would exceed daily cap.
+  stop_day_loss_pct_of_equity: 0.08
+  stop_day_loss_floor_nok: 40
+  # After this many consecutive settled losses, require grade A only
+  loss_streak_grade_a_only: 3
+
+selection:
+  # Model probability is haircut before EV (NT margin + optimism).
+  probability_haircut: 0.05
+  standard_min_ev: 0.03
+  # Odds > threshold are ALLOWED when evidence supports them — not banned.
+  high_odds_threshold: 2.5
+  high_odds_min_grade: A
+  high_odds_min_ev: 0.08
+  high_odds_stake_multiplier: 0.6
+  high_odds_max_per_round: 2
+  # If historical band ROI is terrible with enough sample, raise the bar further
+  band_penalty:
+    min_sample: 15
+    bad_roi_below: -0.10
+    extra_ev_required: 0.05
+  # Prefer bands that have shown edge in THIS book (soft prior, not hard ban)
+  band_prior_boost:
+    "<1.5": 0.02
+    "1.5-1.8": 0.0
+    "1.8-2.2": 0.015
+    "2.2-2.5": -0.01
+    "2.5-3.0": -0.02
+    ">=3.0": -0.03
+  min_research_sources:
+    default: 6
+    grade_A: 10
+    high_odds: 12
+  empty_slip_ok: true
+
+# Ledger-driven learning loop (recomputed on settle / `nt learn` / refresh)
+# Does NOT rewrite this file — live mults live in data/state/learning.json
+learning:
+  enabled: true
+  min_sample: 12              # below this → stake×1.0, EV boost 0
+  recent_window: 30           # last N settled per group for form blend
+  recent_weight: 0.40         # blend weight on recent ROI (rest = all-time)
+  # How much to trust older / thinner-process history for mults
+  weight_mode: weighted       # weighted | equal | process_only
+  half_life_days: 60          # recency decay for learning weights
+  archive_process_weight: 0.35
+  live_no_model_weight: 0.60
+  full_process_weight: 1.0
+  stake_mult_min: 0.72
+  stake_mult_max: 1.18
+  stake_roi_scale: 0.90       # stake_mult ≈ 1 + roi * scale * confidence
+  ev_boost_min: -0.045
+  ev_boost_max: 0.035
+  ev_roi_scale: 0.12          # EV += roi * scale * confidence
+  block_min_sample: 20        # soft-block only with real sample
+  block_roi_below: -0.18      # blended ROI ≤ this → reject sport/market
+  max_lessons: 14
+  # Avoid getting stuck in one sport / market type (counts OPEN PENDING + new slip)
+  diversification:
+    max_per_sport: 2          # max open bets of same sport (pending + this recommend)
+    max_per_market: 2         # max open of same market family
+    max_per_band: 3
+    # Exploration: under-sampled groups get a small EV nudge (not free money)
+    explore_min_n: 3          # need at least this many settled in group
+    explore_max_n: 11         # below min_sample → still "thin"
+    explore_ev_boost: 0.012
+    explore_stake_floor: 0.95 # don't size new types all the way down
+    explore_min_roi: -0.12    # don't explore groups that are already deep red
+
+paths:
+  bets: data/bets.csv
+  state_dir: data/state
+  inbox: inbox
+  outbox: outbox
+  evidence: evidence
+  history: history
+  status: data/state/status.md
+  bankroll_md: data/state/current_bankroll.md
+  edges_jsonl: data/edges.jsonl
+  edges_summary: data/state/edges_summary.md
+  learning_json: data/state/learning.json
+  learning_history_jsonl: data/state/learning_history.jsonl
+  decisions_jsonl: data/state/bet_decisions.jsonl
+
+git:
+  auto_commit: false   # set true only if you want CLI to commit

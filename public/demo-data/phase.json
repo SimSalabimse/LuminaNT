@@ -1,0 +1,25 @@
+{
+  "phase_id": "1A",
+  "label": "Protect",
+  "stake_min": 10.0,
+  "stake_max": 12.0,
+  "max_bets_per_round": 3,
+  "max_doubles_per_round": 0,
+  "daily_risk_pct": 0.08,
+  "daily_risk_floor": 30.0,
+  "daily_risk_ceil": 42.0,
+  "next": "1B",
+  "equity_phase": "1A",
+  "count_phase": "4",
+  "rolling_roi": -0.06194078947368418,
+  "peak_equity_nok": 589.92,
+  "drawdown_from_peak_pct": 0.0455,
+  "reasons": [
+    "equity_phase=1A (equity 563.09)",
+    "count_phase=4 (settled 208)",
+    "peak_equity=589.92",
+    "count unlock blocked: rolling ROI -6.2% < stability 0.0%"
+  ],
+  "equity_nok": 563.09,
+  "settled_count": 208
+}

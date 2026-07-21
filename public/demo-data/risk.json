@@ -1,0 +1,15 @@
+{
+  "date": "2026-07-15",
+  "equity_nok": 563.09,
+  "phase_id": "1A",
+  "daily_risk_cap_nok": 42.0,
+  "daily_risk_pct": 0.08,
+  "open_pending_risk_nok": 32.0,
+  "remaining_risk_nok": 10.0,
+  "today_realized_pl_nok": 0.0,
+  "stop_day_loss_limit_nok": 45.05,
+  "stopped": false,
+  "can_bet": true,
+  "reasons": [],
+  "formula": "daily_cap = clamp(equity * phase.daily_risk_pct, floor, ceil)"
+}
