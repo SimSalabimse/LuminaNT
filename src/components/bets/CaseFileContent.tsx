@@ -77,6 +77,39 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
+function StakeCell({
+  label,
+  value,
+  accent,
+  bold,
+  mono,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  bold?: boolean;
+  mono?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-white/[0.07] bg-black/30 px-2.5 py-2.5">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+        {label}
+      </div>
+      <div
+        className={cn(
+          "mt-1 text-sm tabular-nums",
+          mono || accent ? "font-mono" : "font-mono",
+          accent && "font-bold text-primary",
+          bold && "font-bold tracking-wide",
+          !accent && !bold && "font-semibold"
+        )}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
 /** Shared Case File body — used in dual-pane dock and modal */
 export function CaseFileContent({ bet }: { bet: Bet }) {
   const snapshot = useDataStore((s) => s.snapshot);
@@ -319,82 +352,39 @@ export function CaseFileContent({ bet }: { bet: Bet }) {
           const room =
             sd?.remaining_risk_nok != null
               ? Number(sd.remaining_risk_nok)
-              : snapshot?.risk?.remaining_risk_nok != null
-                ? Number(snapshot.risk.remaining_risk_nok)
-                : null;
-          const hasDecision =
+              : null;
+          const finalStake = stakeRec ?? Number(bet.stake_nok) ?? 0;
+          const hasMeta =
             stakeRec != null || sizeMode != null || unit != null || rules != null;
-
-          if (!hasDecision) {
-            return (
-              <p className="text-sm text-muted-foreground py-1">
-                No stake decision recorded for this ticket. Ledger stake{" "}
-                <span className="font-mono font-semibold text-foreground">
-                  {formatNokPlain(bet.stake_nok)} NOK
-                </span>
-                .
-              </p>
-            );
-          }
 
           return (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                <div className="rounded-lg border border-white/[0.06] bg-black/25 px-2.5 py-2">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                    Final stake
-                  </div>
-                  <div className="mt-0.5 font-mono text-sm font-bold text-primary tabular-nums">
-                    {stakeRec != null
-                      ? `${formatNokPlain(stakeRec)} NOK`
-                      : `${formatNokPlain(bet.stake_nok)} NOK`}
-                  </div>
-                </div>
-                <div className="rounded-lg border border-white/[0.06] bg-black/25 px-2.5 py-2">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                    Unit
-                  </div>
-                  <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums">
-                    {unit != null ? `${formatNokPlain(unit)} NOK` : "—"}
-                  </div>
-                </div>
-                <div className="rounded-lg border border-white/[0.06] bg-black/25 px-2.5 py-2">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                    Size mode
-                  </div>
-                  <div className="mt-0.5 text-sm font-bold tracking-wide">
-                    {sizeMode || "—"}
-                  </div>
-                </div>
-                <div className="rounded-lg border border-white/[0.06] bg-black/25 px-2.5 py-2">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                    Ledger stake
-                  </div>
-                  <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums">
-                    {formatNokPlain(bet.stake_nok)} NOK
-                  </div>
-                </div>
-                <div className="rounded-lg border border-white/[0.06] bg-black/25 px-2.5 py-2">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                    Room (at place)
-                  </div>
-                  <div className="mt-0.5 font-mono text-sm font-semibold tabular-nums">
-                    {room != null ? `${formatNokPlain(room)} NOK` : "—"}
-                  </div>
-                </div>
-                <div className="rounded-lg border border-white/[0.06] bg-black/25 px-2.5 py-2">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                    Rule version
-                  </div>
-                  <div className="mt-0.5 font-mono text-xs font-semibold">
-                    {rules || "—"}
-                  </div>
-                </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <StakeCell
+                  label="Final stake"
+                  value={`${formatNokPlain(finalStake)} NOK`}
+                  accent
+                />
+                <StakeCell
+                  label="Unit"
+                  value={unit != null ? `${formatNokPlain(unit)} NOK` : "—"}
+                />
+                <StakeCell label="Size mode" value={sizeMode || "—"} bold />
+                <StakeCell
+                  label="Ledger stake"
+                  value={`${formatNokPlain(bet.stake_nok)} NOK`}
+                />
+                <StakeCell
+                  label="Room at place"
+                  value={room != null ? `${formatNokPlain(room)} NOK` : "—"}
+                />
+                <StakeCell label="Rule version" value={rules || "—"} mono />
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                Sizing audit trail in{" "}
-                <span className="font-mono">data/state/stake_decisions.jsonl</span>.
-              </p>
+              {!hasMeta && (
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  No sizing audit fields on this ticket — showing ledger stake only.
+                </p>
+              )}
             </div>
           );
         })()}

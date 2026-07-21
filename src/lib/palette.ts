@@ -1,6 +1,6 @@
 /**
- * LuminaNT · God Desk design tokens
- * Hero accent: Electric Gold / Amber-Gold ("God color")
+ * LuminaNT · Capital Desk design tokens
+ * Electric gold (#C9A227) for primary status/actions only.
  * CSS HSL counterparts live in index.css :root.
  */
 

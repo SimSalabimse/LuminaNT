@@ -170,9 +170,9 @@ function num(x: unknown): number | null {
 
 export function modeShellClass(mode: SizeMode | string): string {
   const m = String(mode).toUpperCase();
-  if (m === "FROZEN") return "ring-1 ring-loss/40 bg-loss/[0.06]";
-  if (m === "REDUCED") return "ring-1 ring-pending/35 bg-pending/[0.05]";
-  if (m === "NORMAL") return "ring-1 ring-primary/20 bg-primary/[0.03]";
+  if (m === "FROZEN") return "mode-shell-frozen";
+  if (m === "REDUCED") return "mode-shell-reduced";
+  if (m === "NORMAL") return "mode-shell-normal";
   return "";
 }
 

@@ -17,14 +17,13 @@ import { isTauri } from "@/lib/tauri";
 import {
   deriveRiskStatus,
   gateBadgeVariant,
-  modeBadgeVariant,
   modeShellClass,
 } from "@/lib/riskStatus";
 
 /**
- * Capital strip — calm primary metrics only.
- * Equity · Liquid · Open Risk · size_mode · Can Bet · DD%
- * Secondary: rooms, util, phase, scope, forensic.
+ * Capital strip — calm, scannable, mode-dominant.
+ * Primary: Equity · Liquid · Open Risk · DD% · size_mode · Can Bet
+ * Secondary (collapsed): rooms, unit, phase, scope
  */
 export function DeskStrip() {
   const snapshot = useDataStore((s) => s.snapshot);
@@ -48,42 +47,11 @@ export function DeskStrip() {
   const dailyCap = Number(risk.daily_risk_cap_nok) || 0;
   const util = dailyCap > 0 ? status.openRisk / dailyCap : 0;
 
-  const stakeMin = phase.stake_min;
-  const stakeMax = phase.stake_max;
-  const stakeBand =
-    stakeMin != null && stakeMax != null
-      ? `${formatNokPlain(Number(stakeMin))}–${formatNokPlain(Number(stakeMax))}`
-      : "—";
-
-  const reduceAt = 0.15;
-  const freezeAt = 0.25;
-  const ddUse = status.dd;
-  const distReduce =
-    ddUse != null && ddUse < reduceAt
-      ? `${((reduceAt - ddUse) * 100).toFixed(1)}pp to REDUCED`
-      : ddUse != null && ddUse < freezeAt
-        ? `${((freezeAt - ddUse) * 100).toFixed(1)}pp to FREEZE`
-        : status.gate === "FROZEN"
-          ? "at FREEZE"
-          : null;
-
   const openTickets = allBets.filter((b) => isOpenRisk(b.result));
-  const nPending = openTickets.filter(
-    (b) => (b.result || "").toLowerCase() === "pending"
-  ).length;
-  const nConfirmed = openTickets.filter(
-    (b) => normalizeResult(b.result) === "confirmedplaced"
-  ).length;
   const openHover =
     openTickets.length === 0
       ? "No open risk"
-      : [
-          `${openTickets.length} open`,
-          nPending ? `${nPending} Pending` : null,
-          nConfirmed ? `${nConfirmed} ConfirmedPlaced` : null,
-        ]
-          .filter(Boolean)
-          .join(" · ");
+      : `${openTickets.length} open ticket(s) · ${formatNokPlain(status.openRisk)} NOK`;
 
   const forensicActive =
     (filters.betIds?.length || 0) > 0 || (filters.forensicTrail?.length || 0) > 0;
@@ -95,9 +63,7 @@ export function DeskStrip() {
         ? `${filters.betIds.length} tickets`
         : null;
 
-  const onRefresh = () => {
-    refresh({ runNtRefresh: !demo && isTauri() });
-  };
+  const onRefresh = () => refresh({ runNtRefresh: !demo && isTauri() });
 
   const onUnfreeze = async () => {
     if (!isTauri() || demo) {
@@ -106,7 +72,7 @@ export function DeskStrip() {
     }
     if (
       !window.confirm(
-        "Clear capital freeze?\n\nWrites freeze_audit and refreshes engine. Only after reviewing DD / stop reasons."
+        "Clear capital freeze?\n\nOnly after reviewing DD / stop reasons."
       )
     )
       return;
@@ -132,6 +98,7 @@ export function DeskStrip() {
     }
   };
 
+  const ddUse = status.dd;
   const ddTone: "loss" | "pending" | undefined =
     ddUse == null
       ? undefined
@@ -141,117 +108,119 @@ export function DeskStrip() {
           ? "pending"
           : undefined;
 
+  const modeNotNormal =
+    status.sizeMode === "REDUCED" || status.sizeMode === "FROZEN";
+
   return (
     <div
       className={cn(
-        "shrink-0 border-b border-white/[0.1] bg-[#080c14]/98 relative z-10 backdrop-blur-md transition-colors duration-500",
+        "shrink-0 border-b border-white/[0.08] bg-[#070b12]/98 relative z-10 transition-colors duration-300",
         modeShellClass(status.sizeMode)
       )}
     >
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent pointer-events-none" />
+      {/* Mode banner when not NORMAL — dominant language */}
+      {modeNotNormal && (
+        <div
+          className={cn(
+            "px-4 py-1.5 text-center text-[12px] font-semibold tracking-wide border-b",
+            status.sizeMode === "FROZEN" &&
+              "bg-loss/15 border-loss/25 text-loss",
+            status.sizeMode === "REDUCED" &&
+              "bg-pending/12 border-pending/25 text-pending"
+          )}
+        >
+          {status.sizeMode === "FROZEN"
+            ? "FROZEN — no new risk until unfreeze"
+            : "REDUCED — half-unit sizing only"}
+          {!status.canBet && status.reason ? ` · ${status.reason}` : ""}
+        </div>
+      )}
 
-      {/* Primary — scannable capital facts only */}
-      <div className="px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+      {/* Primary row */}
+      <div className="px-4 py-3.5 flex flex-wrap items-center gap-x-5 gap-y-3">
         <PrimaryMetric
           label="Equity"
           value={formatNokPlain(status.equity)}
-          emphasis
-          title="Engine bankroll equity — sole capital truth"
+          hero
+          title="Engine bankroll equity"
         />
-        <StripSep />
+        <Divider />
         <PrimaryMetric
           label="Liquid"
           value={formatNokPlain(status.liquid)}
-          title={
-            status.v2
-              ? "Riskable liquid = equity − secure − open"
-              : "Equity − open risk"
-          }
+          title={status.v2 ? "Riskable liquid" : "Equity − open risk"}
         />
-        {status.v2 && status.secure > 0 && (
-          <>
-            <span className="hidden lg:inline text-[11px] text-muted-foreground font-mono">
-              <span className="opacity-60">Secure </span>
-              {formatNokPlain(status.secure)}
-            </span>
-          </>
-        )}
-        <StripSep />
+        <Divider />
         <PrimaryMetric
           label="Open risk"
           value={formatNokPlain(status.openRisk)}
           tone="pending"
           title={openHover}
         />
-        <StripSep />
+        <Divider />
         <PrimaryMetric
           label="DD%"
           value={status.ddPctLabel}
           tone={ddTone}
-          emphasis={ddUse != null && ddUse >= 0.1}
-          title={
-            distReduce
-              ? `Drawdown from peak · ${distReduce}`
-              : "Drawdown from high-water mark"
-          }
+          title="Drawdown from peak equity"
         />
 
-        <div className="flex-1 min-w-[8px]" />
+        <div className="flex-1 min-w-[12px]" />
 
-        {/* size_mode — dominant visual language */}
+        {/* size_mode — large */}
         <div
           className={cn(
-            "inline-flex items-center gap-2 rounded-xl border px-3 py-1.5",
-            status.sizeMode === "FROZEN" &&
-              "border-loss/40 bg-loss/10",
-            status.sizeMode === "REDUCED" &&
-              "border-pending/40 bg-pending/10",
-            status.sizeMode === "NORMAL" &&
-              "border-primary/30 bg-primary/10",
+            "flex flex-col items-center justify-center rounded-xl border px-4 py-2 min-w-[104px]",
+            status.sizeMode === "NORMAL" && "border-primary/35 bg-primary/10",
+            status.sizeMode === "REDUCED" && "border-pending/40 bg-pending/12",
+            status.sizeMode === "FROZEN" && "border-loss/40 bg-loss/12",
             status.sizeMode === "LEGACY" && "border-white/10 bg-white/5"
           )}
-          title="Size mode from drawdown / freeze layers"
         >
-          <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-semibold">
+          <span className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
             Mode
           </span>
-          <Badge
-            variant={modeBadgeVariant(status.sizeMode)}
-            className="text-[12px] font-bold font-sans h-6 px-2.5 tracking-wide"
+          <span
+            className={cn(
+              "mt-0.5 text-lg font-bold tracking-wide leading-none",
+              status.sizeMode === "NORMAL" && "text-primary",
+              status.sizeMode === "REDUCED" && "text-pending",
+              status.sizeMode === "FROZEN" && "text-loss"
+            )}
           >
             {status.sizeMode === "LEGACY" ? "—" : status.sizeMode}
-          </Badge>
+          </span>
         </div>
 
-        {/* Single source of truth: Can bet */}
+        {/* Can bet — large, single source of truth */}
         <div
           className={cn(
-            "inline-flex items-center gap-2 rounded-xl border px-3 py-1.5",
-            status.canBet
-              ? "border-profit/30 bg-profit/10"
-              : "border-loss/35 bg-loss/10"
+            "flex flex-col items-center justify-center rounded-xl border px-4 py-2 min-w-[104px]",
+            status.canBet ? "border-profit/35 bg-profit/10" : "border-loss/40 bg-loss/12"
           )}
           title={status.reason}
         >
-          <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-semibold">
+          <span className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
             Can bet
           </span>
-          <Badge
-            variant={gateBadgeVariant(status.gate)}
-            className="text-[12px] font-bold font-sans h-6 px-2.5 tracking-wide"
+          <span
+            className={cn(
+              "mt-0.5 text-lg font-bold tracking-wide leading-none",
+              status.canBet ? "text-profit" : "text-loss"
+            )}
           >
             {status.betLabel}
-          </Badge>
+          </span>
         </div>
 
         {status.gate === "FROZEN" && (
           <Button
-            size="sm"
+            size="default"
             variant="outline"
-            className="h-8 gap-1.5 px-3 text-xs font-sans border-amber-500/50 text-amber-100 bg-amber-500/10 hover:bg-amber-500/20"
+            className="h-11 gap-2 px-4 border-amber-500/55 text-amber-50 bg-amber-500/15 hover:bg-amber-500/25 font-semibold"
             onClick={onUnfreeze}
           >
-            <Unlock className="h-3.5 w-3.5" />
+            <Unlock className="h-4 w-4" />
             Unfreeze
           </Button>
         )}
@@ -259,53 +228,51 @@ export function DeskStrip() {
         <button
           type="button"
           onClick={() => setSecondaryOpen((v) => !v)}
-          className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground font-sans px-2 py-1.5 rounded-lg hover:bg-white/5 min-h-[32px]"
-          title={secondaryOpen ? "Hide rooms & scope" : "Show rooms & scope"}
+          className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground font-medium px-2.5 py-2 rounded-lg hover:bg-white/5 min-h-[40px]"
         >
-          {secondaryOpen ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )}
-          <span className="hidden sm:inline">More</span>
+          {secondaryOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          Details
         </button>
 
         <Button
           size="sm"
           variant="outline"
-          className="h-8 gap-1.5 px-3 text-xs font-sans"
+          className="h-10 gap-1.5"
           onClick={onRefresh}
           disabled={refreshing}
         >
           <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
-          <span className="hidden sm:inline">Refresh</span>
+          Refresh
         </Button>
       </div>
 
-      {/* One-line reason when not clear */}
-      {!status.canBet && (
-        <div className="px-4 pb-2 -mt-1">
-          <p className="text-[11px] text-muted-foreground leading-snug max-w-3xl">
+      {/* Reason when blocked and NORMAL (no mode banner) */}
+      {!status.canBet && !modeNotNormal && (
+        <div className="px-4 pb-2.5 -mt-1">
+          <p className="text-[12px] text-muted-foreground leading-snug max-w-3xl">
             {status.reason}
           </p>
         </div>
       )}
 
       {secondaryOpen && (
-        <div className="px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] border-t border-white/[0.05] bg-black/25">
-          <SecMetric label="Remaining" value={formatNokPlain(status.remaining)} />
-          <SecMetric label="Unit" value={formatNokPlain(status.unit)} />
+        <div className="px-4 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] border-t border-white/[0.05] bg-black/30">
+          <Sec label="Remaining" value={formatNokPlain(status.remaining)} />
+          <Sec label="Unit" value={formatNokPlain(status.unit)} />
           {status.openRoom != null && (
-            <SecMetric label="Open room" value={formatNokPlain(status.openRoom)} />
+            <Sec label="Open room" value={formatNokPlain(status.openRoom)} />
           )}
           {status.dailyRoom != null && (
-            <SecMetric label="Day room" value={formatNokPlain(status.dailyRoom)} />
+            <Sec label="Day room" value={formatNokPlain(status.dailyRoom)} />
           )}
           {status.weeklyRoom != null && (
-            <SecMetric label="Week room" value={formatNokPlain(status.weeklyRoom)} />
+            <Sec label="Week room" value={formatNokPlain(status.weeklyRoom)} />
+          )}
+          {status.secure > 0 && (
+            <Sec label="Secure" value={formatNokPlain(status.secure)} />
           )}
           {status.todayPl != null && (
-            <SecMetric
+            <Sec
               label="Today P/L"
               value={`${status.todayPl >= 0 ? "+" : ""}${formatNokPlain(status.todayPl)}`}
               tone={
@@ -317,23 +284,21 @@ export function DeskStrip() {
               }
             />
           )}
-          <SecMetric
+          <Sec
             label="Util"
             value={`${(util * 100).toFixed(0)}%`}
             tone={util >= 0.95 ? "loss" : util >= 0.8 ? "pending" : undefined}
           />
-          <SecMetric label="Phase" value={String(phase.phase_id ?? "—")} sans />
-          <SecMetric label="Stake band" value={stakeBand} />
-          {distReduce && <SecMetric label="DD path" value={distReduce} sans />}
+          <Sec label="Phase" value={String(phase.phase_id ?? "—")} />
 
-          <div className="flex-1 min-w-[4px]" />
+          <div className="flex-1" />
 
-          <div className="flex items-center rounded-lg border border-white/[0.1] bg-black/30 p-0.5 font-sans">
+          <div className="flex items-center rounded-lg border border-white/12 bg-black/40 p-0.5">
             <button
               type="button"
               onClick={() => setFilterScope("full")}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors min-h-[28px]",
+                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium min-h-[32px]",
                 filterScope === "full"
                   ? "bg-white/10 text-foreground"
                   : "text-muted-foreground hover:text-foreground"
@@ -346,7 +311,7 @@ export function DeskStrip() {
               type="button"
               onClick={() => setFilterScope("filtered")}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors min-h-[28px]",
+                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium min-h-[32px]",
                 filterScope === "filtered"
                   ? "bg-white/10 text-foreground"
                   : "text-muted-foreground hover:text-foreground"
@@ -364,7 +329,7 @@ export function DeskStrip() {
                 clearForensic();
                 setToast("Forensic filter cleared");
               }}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-[11px] font-sans hover:bg-white/10 max-w-[200px] min-h-[28px]"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-[12px] hover:bg-white/10 max-w-[220px] min-h-[32px]"
             >
               <span className="truncate">Forensic · {forensicLabel}</span>
               <X className="h-3.5 w-3.5 shrink-0 opacity-70" />
@@ -372,51 +337,46 @@ export function DeskStrip() {
           )}
 
           {forensicActive && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 text-[11px] font-sans"
-              onClick={() => setView("bets")}
-            >
+            <Button size="sm" variant="ghost" onClick={() => setView("bets")}>
               Ledger
             </Button>
           )}
+
+          <Badge variant={gateBadgeVariant(status.gate)} className="text-[10px] font-mono">
+            {status.gate}
+          </Badge>
         </div>
       )}
     </div>
   );
 }
 
-function normalizeResult(r: string): string {
-  return (r || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
-}
-
-function StripSep() {
-  return <div className="hidden sm:block h-5 w-px bg-white/[0.1] shrink-0" />;
+function Divider() {
+  return <div className="hidden sm:block h-8 w-px bg-white/[0.08] shrink-0" />;
 }
 
 function PrimaryMetric({
   label,
   value,
   tone,
-  emphasis,
+  hero,
   title,
 }: {
   label: string;
   value: string;
   tone?: "profit" | "loss" | "pending";
-  emphasis?: boolean;
+  hero?: boolean;
   title?: string;
 }) {
   return (
-    <div className="flex flex-col gap-0.5 min-w-0" title={title}>
-      <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-semibold font-sans">
+    <div className="flex flex-col gap-1 min-w-0" title={title}>
+      <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
         {label}
       </span>
       <span
         className={cn(
           "font-mono tabular-nums leading-none",
-          emphasis ? "text-[15px] font-bold" : "text-[14px] font-semibold",
+          hero ? "text-[1.35rem] font-bold" : "text-[1.15rem] font-semibold",
           tone === "profit" && "text-profit",
           tone === "loss" && "text-loss",
           tone === "pending" && "text-pending",
@@ -429,26 +389,23 @@ function PrimaryMetric({
   );
 }
 
-function SecMetric({
+function Sec({
   label,
   value,
   tone,
-  sans,
 }: {
   label: string;
   value: string;
   tone?: "profit" | "loss" | "pending";
-  sans?: boolean;
 }) {
   return (
-    <div className="flex items-baseline gap-1.5 min-w-0">
-      <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold font-sans shrink-0">
+    <div className="flex items-baseline gap-1.5">
+      <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
         {label}
       </span>
       <span
         className={cn(
-          "tabular-nums text-[12px] font-semibold",
-          sans ? "font-sans" : "font-mono",
+          "font-mono tabular-nums font-semibold text-[13px]",
           tone === "profit" && "text-profit",
           tone === "loss" && "text-loss",
           tone === "pending" && "text-pending"

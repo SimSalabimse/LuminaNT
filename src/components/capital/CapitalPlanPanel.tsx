@@ -194,15 +194,13 @@ export function CapitalPlanPanel() {
       {/* Hero — current status is the page lead */}
       <div
         className={cn(
-          "relative overflow-hidden rounded-2xl border p-6 md:p-7",
-          "bg-gradient-to-br from-card/95 via-card/75 to-black/50",
+          "relative overflow-hidden rounded-2xl border p-6 md:p-7 bg-card",
           status.gate === "FROZEN" && "border-loss/30",
           status.gate === "REDUCED" && "border-pending/30",
           status.canBet && status.gate !== "REDUCED" && "border-primary/25",
           !status.canBet && status.gate !== "FROZEN" && "border-white/[0.1]"
         )}
       >
-        <div className="absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
 
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div className="min-w-0 space-y-3">

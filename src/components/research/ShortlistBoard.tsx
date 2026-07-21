@@ -1,5 +1,5 @@
 /**
- * Premium shortlist cards — ranked, status-forward, expandable stake rationale.
+ * Premium shortlist decision board — ranked, dense, no empty voids.
  */
 import { useMemo, useState } from "react";
 import {
@@ -34,15 +34,15 @@ function StatusIcon({ status }: { status: ShortlistCard["status"] }) {
 }
 
 function statusShell(status: ShortlistCard["status"]) {
-  if (status === "win") return "border-profit/35 bg-profit/[0.04]";
-  if (status === "loss") return "border-loss/25 bg-loss/[0.03]";
-  if (status === "open") return "border-pending/35 bg-pending/[0.05]";
-  if (status === "planned") return "border-primary/30 bg-primary/[0.04]";
-  return "border-white/[0.08] bg-card/40";
+  if (status === "win") return "border-profit/30 bg-card";
+  if (status === "loss") return "border-loss/25 bg-card";
+  if (status === "open") return "border-pending/35 bg-card";
+  if (status === "planned") return "border-primary/30 bg-card";
+  return "border-white/[0.08] bg-card";
 }
 
 function statusLabel(status: ShortlistCard["status"]) {
-  if (status === "planned") return "Pending place";
+  if (status === "planned") return "To place";
   if (status === "open") return "Open";
   if (status === "win") return "Win";
   if (status === "loss") return "Loss";
@@ -62,30 +62,28 @@ function rankCards(cards: ShortlistCard[]): ShortlistCard[] {
   return [...cards].sort((a, b) => {
     const dw = weight(a.status) - weight(b.status);
     if (dw !== 0) return dw;
-    const evA = a.ev ?? -999;
-    const evB = b.ev ?? -999;
-    return evB - evA;
+    return (b.ev ?? -999) - (a.ev ?? -999);
   });
 }
 
 function stakeRationale(c: ShortlistCard): { short: string; detail: string } {
   const parts: string[] = [];
-  if (c.unit != null) parts.push(`unit ${formatNokPlain(c.unit)}`);
-  if (c.sizeMode) parts.push(c.sizeMode);
-  if (c.band) parts.push(`band ${c.band}`);
-  if (c.rules) parts.push(c.rules);
+  if (c.unit != null) parts.push(`Unit ${formatNokPlain(c.unit)} NOK`);
+  if (c.sizeMode) parts.push(`Mode ${c.sizeMode}`);
+  if (c.band) parts.push(`Band ${c.band}`);
+  if (c.rules) parts.push(`Rules ${c.rules}`);
   const short =
     c.status === "planned"
       ? c.stake
-        ? `Recommended ${formatNokPlain(c.stake)} NOK`
+        ? `Recommended stake ${formatNokPlain(c.stake)} NOK`
         : "Awaiting stake"
       : c.stake
-        ? `Stake ${formatNokPlain(c.stake)} NOK`
+        ? `Ledger stake ${formatNokPlain(c.stake)} NOK`
         : "No stake";
   const detail =
     parts.length > 0
-      ? `${parts.join(" · ")} · ${c.statusReason}`
-      : c.statusReason || c.notes || "No extra sizing detail";
+      ? `${parts.join(" · ")}. ${c.statusReason}`
+      : c.statusReason || c.notes || "No extra sizing detail on this ticket.";
   return { short, detail };
 }
 
@@ -131,48 +129,58 @@ export function ShortlistBoard() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      {/* Board header */}
+      <div className="rounded-2xl border border-white/[0.08] bg-card px-5 py-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold flex items-center gap-2 tracking-tight">
+          <h2 className="text-base font-semibold flex items-center gap-2 tracking-tight">
             <ListChecks className="h-5 w-5 text-primary" />
-            Shortlist
+            Decision board
           </h2>
-          <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-            Ranked place-slip and live tickets. Primary action order is top-left.
+          <p className="text-sm text-muted-foreground mt-1">
+            Ranked place-slip and live tickets · top-left is recommended first
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary" className="font-mono text-[11px] h-7 px-2.5">
+          <Badge variant="secondary" className="font-mono h-8 px-3">
             {cards.length} cards
           </Badge>
           {totalOpenStake > 0 && (
-            <Badge variant="outline" className="font-mono text-[11px] h-7 px-2.5 border-pending/30 text-pending">
-              {formatNokPlain(totalOpenStake)} open/planned
+            <Badge
+              variant="outline"
+              className="font-mono h-8 px-3 border-pending/30 text-pending"
+            >
+              {formatNokPlain(totalOpenStake)} open
             </Badge>
           )}
           {status.v2 && (
             <Badge
               variant={modeBadgeVariant(status.sizeMode)}
-              className="text-[11px] h-7 px-2.5 font-bold"
+              className="h-8 px-3 font-bold"
             >
-              Desk {status.sizeMode}
+              {status.sizeMode}
             </Badge>
           )}
+          <Badge
+            variant={status.canBet ? "success" : "loss"}
+            className="h-8 px-3 font-bold"
+          >
+            {status.betLabel}
+          </Badge>
         </div>
       </div>
 
       {cards.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/[0.12] bg-black/25 px-8 py-16 text-center">
-          <Shield className="h-8 w-8 text-muted-foreground/50 mx-auto mb-3" />
-          <p className="text-sm font-medium text-foreground/90">No shortlist yet</p>
-          <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-            Run recommend from Ops to build a place slip. Cards will appear here with
+        <div className="rounded-2xl border border-dashed border-white/[0.1] bg-card/50 px-8 py-16 text-center max-w-2xl mx-auto">
+          <Shield className="h-9 w-9 text-muted-foreground/40 mx-auto mb-3" />
+          <p className="text-base font-medium">No shortlist yet</p>
+          <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto leading-relaxed">
+            Run recommend from Ops to build a place slip. Cards appear here with
             stake, size mode, and rationale.
           </p>
           <Button
-            size="sm"
+            size="default"
             variant="outline"
-            className="mt-5 gap-1.5"
+            className="mt-6"
             onClick={() => setView("workflow")}
           >
             Open Ops
@@ -182,8 +190,8 @@ export function ShortlistBoard() {
         <div
           className={cn(
             "grid gap-4",
-            cards.length === 1 && "max-w-xl",
-            cards.length === 2 && "sm:grid-cols-2 max-w-4xl",
+            cards.length === 1 && "max-w-xl mx-auto",
+            cards.length === 2 && "sm:grid-cols-2 max-w-4xl mx-auto",
             cards.length >= 3 && "sm:grid-cols-2 xl:grid-cols-3"
           )}
         >
@@ -197,42 +205,41 @@ export function ShortlistBoard() {
                 : null;
 
             return (
-              <div
+              <article
                 key={c.id}
                 className={cn(
-                  "group relative flex flex-col rounded-2xl border p-5 transition-all duration-200",
-                  "hover:shadow-[0_0_40px_-14px_hsl(var(--primary)/0.35)]",
+                  "relative flex flex-col rounded-2xl border p-5 min-h-[320px]",
+                  "transition-colors duration-150 hover:border-primary/35",
                   statusShell(c.status)
                 )}
               >
-                {/* Rank badge */}
-                <div className="absolute -top-2.5 left-4">
+                <div className="absolute -top-2.5 left-4 z-[1]">
                   <span
                     className={cn(
-                      "inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full px-2 text-[11px] font-bold font-mono",
+                      "inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded-full px-2.5 text-[12px] font-bold font-mono border",
                       idx === 0
-                        ? "bg-primary text-primary-foreground shadow-[0_0_16px_-2px_hsl(var(--primary)/0.6)]"
-                        : "bg-black/60 border border-white/15 text-muted-foreground"
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background border-white/15 text-muted-foreground"
                     )}
                   >
                     #{idx + 1}
                   </span>
                 </div>
 
-                <div className="flex items-start justify-between gap-3 pt-1">
+                <div className="flex items-start justify-between gap-3 pt-2">
                   <div className="min-w-0 flex-1">
-                    <div className="text-[15px] font-semibold leading-snug line-clamp-2">
+                    <h3 className="text-[15px] font-semibold leading-snug line-clamp-2">
                       {c.match}
-                    </div>
-                    <div className="mt-1.5 text-sm text-muted-foreground line-clamp-2">
+                    </h3>
+                    <p className="mt-1.5 text-sm text-muted-foreground line-clamp-2 leading-snug">
                       {c.selection}
-                    </div>
+                    </p>
                   </div>
-                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <div className="flex flex-col items-end gap-1 shrink-0">
                     <StatusIcon status={c.status} />
                     <span
                       className={cn(
-                        "text-[10px] font-semibold uppercase tracking-wider",
+                        "text-[10px] font-bold uppercase tracking-wider",
                         c.status === "planned" && "text-primary",
                         c.status === "open" && "text-pending",
                         c.status === "win" && "text-profit",
@@ -246,7 +253,7 @@ export function ShortlistBoard() {
 
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {c.grade && (
-                    <Badge variant="outline" className="text-[11px] h-6">
+                    <Badge variant="outline" className="h-7 text-[11px]">
                       Grade {c.grade}
                     </Badge>
                   )}
@@ -259,21 +266,26 @@ export function ShortlistBoard() {
                             ? "accent"
                             : "success"
                       }
-                      className="text-[11px] h-6 font-bold"
+                      className="h-7 text-[11px] font-bold"
                     >
                       {c.sizeMode}
                     </Badge>
                   )}
                   {c.band && (
-                    <Badge variant="secondary" className="text-[11px] h-6 font-mono">
+                    <Badge variant="secondary" className="h-7 text-[11px] font-mono">
                       {c.band}
                     </Badge>
                   )}
-                  {riskShare != null && riskShare > 0 && (c.status === "open" || c.status === "planned") && (
-                    <Badge variant="outline" className="text-[11px] h-6 font-mono text-pending border-pending/25">
-                      {riskShare.toFixed(1)}% liquid
-                    </Badge>
-                  )}
+                  {riskShare != null &&
+                    riskShare > 0 &&
+                    (c.status === "open" || c.status === "planned") && (
+                      <Badge
+                        variant="outline"
+                        className="h-7 text-[11px] font-mono border-pending/30 text-pending"
+                      >
+                        {riskShare.toFixed(1)}% liquid
+                      </Badge>
+                    )}
                 </div>
 
                 <div className="mt-4 grid grid-cols-4 gap-2">
@@ -306,56 +318,50 @@ export function ShortlistBoard() {
                   />
                 </div>
 
-                <div className="mt-4 rounded-xl border border-white/[0.06] bg-black/30 px-3 py-2.5">
-                  <p className="text-[12px] font-medium text-foreground/90 leading-snug">
-                    {rationale.short}
-                  </p>
+                <div className="mt-auto pt-4">
+                  <div className="rounded-xl border border-white/[0.07] bg-black/35 px-3.5 py-3">
+                    <p className="text-[13px] font-medium leading-snug">
+                      {rationale.short}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setExpanded(isOpen ? null : c.id)}
+                      className="mt-2 flex items-center gap-1 text-[12px] text-muted-foreground hover:text-primary min-h-[28px]"
+                    >
+                      {isOpen ? (
+                        <>
+                          <ChevronUp className="h-3.5 w-3.5" /> Hide detail
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="h-3.5 w-3.5" /> Why this stake
+                        </>
+                      )}
+                    </button>
+                    {isOpen && (
+                      <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground border-t border-white/[0.06] pt-2">
+                        {rationale.detail}
+                      </p>
+                    )}
+                  </div>
+
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setExpanded(isOpen ? null : c.id);
-                    }}
-                    className="mt-1.5 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary transition-colors"
+                    onClick={() => openCard(c)}
+                    className="mt-3 w-full flex items-center justify-center gap-1.5 rounded-xl border border-white/[0.1] bg-white/[0.03] py-2.5 text-[13px] font-medium text-primary hover:bg-primary/10 hover:border-primary/30 min-h-[44px]"
                   >
-                    {isOpen ? (
-                      <>
-                        <ChevronUp className="h-3.5 w-3.5" /> Hide detail
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="h-3.5 w-3.5" /> Why this stake
-                      </>
-                    )}
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Open in Ledger
                   </button>
-                  {isOpen && (
-                    <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground border-t border-white/[0.05] pt-2">
-                      {rationale.detail}
-                    </p>
-                  )}
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => openCard(c)}
-                  className="mt-4 flex items-center justify-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.03] py-2.5 text-xs font-medium text-primary hover:bg-primary/10 hover:border-primary/30 transition-colors min-h-[40px]"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Open in Ledger
-                </button>
-              </div>
+              </article>
             );
           })}
         </div>
       )}
 
-      <div className="flex justify-end pt-1">
-        <Button
-          size="sm"
-          variant="ghost"
-          className="text-xs min-h-[36px]"
-          onClick={() => setView("workflow")}
-        >
+      <div className="flex justify-end">
+        <Button size="sm" variant="ghost" onClick={() => setView("workflow")}>
           Run recommend in Ops →
         </Button>
       </div>
@@ -375,7 +381,7 @@ function Metric({
   tone?: "profit" | "loss";
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-black/30 px-2 py-2.5 text-center">
+    <div className="rounded-xl border border-white/[0.07] bg-black/35 px-2 py-2.5 text-center">
       <div className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground font-semibold">
         {label}
       </div>

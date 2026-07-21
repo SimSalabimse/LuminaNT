@@ -376,32 +376,32 @@ export function BetsExplorer() {
       </div>
 
       {showFilters && (
-        <div className="glass rounded-xl p-3 space-y-2 shrink-0 mb-3">
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
-            <div>
-              <label className="text-[10px] uppercase text-muted-foreground">
+        <div className="rounded-xl border border-white/[0.08] bg-card p-4 space-y-3 shrink-0 mb-3">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
                 From
               </label>
               <Input
                 type="date"
                 value={filters.dateFrom}
                 onChange={(e) => setFilters({ dateFrom: e.target.value })}
-                className="h-8 text-xs"
+                className="h-10 text-sm font-mono"
               />
             </div>
-            <div>
-              <label className="text-[10px] uppercase text-muted-foreground">
+            <div className="space-y-1.5">
+              <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
                 To
               </label>
               <Input
                 type="date"
                 value={filters.dateTo}
                 onChange={(e) => setFilters({ dateTo: e.target.value })}
-                className="h-8 text-xs"
+                className="h-10 text-sm font-mono"
               />
             </div>
-            <div>
-              <label className="text-[10px] uppercase text-muted-foreground">
+            <div className="space-y-1.5">
+              <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
                 Odds min
               </label>
               <Input
@@ -409,11 +409,11 @@ export function BetsExplorer() {
                 step="0.01"
                 value={filters.oddsMin}
                 onChange={(e) => setFilters({ oddsMin: e.target.value })}
-                className="h-8 text-xs"
+                className="h-10 text-sm font-mono"
               />
             </div>
-            <div>
-              <label className="text-[10px] uppercase text-muted-foreground">
+            <div className="space-y-1.5">
+              <label className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
                 Odds max
               </label>
               <Input
@@ -421,7 +421,7 @@ export function BetsExplorer() {
                 step="0.01"
                 value={filters.oddsMax}
                 onChange={(e) => setFilters({ oddsMax: e.target.value })}
-                className="h-8 text-xs"
+                className="h-10 text-sm font-mono"
               />
             </div>
           </div>

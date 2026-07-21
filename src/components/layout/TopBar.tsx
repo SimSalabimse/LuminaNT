@@ -72,8 +72,7 @@ export function TopBar() {
       : "No folder selected";
 
   return (
-    <header className="h-[3.85rem] shrink-0 border-b border-white/[0.06] glass-strong flex items-center gap-3 px-4 relative z-10">
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent pointer-events-none" />
+    <header className="h-14 shrink-0 border-b border-white/[0.07] bg-[#070b12]/98 flex items-center gap-3 px-4 relative z-10">
 
       <div className="flex items-center gap-3 min-w-0 flex-1">
         <div className="hidden md:flex flex-col min-w-0 pl-0.5">

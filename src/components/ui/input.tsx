@@ -8,12 +8,14 @@ export const Input = React.forwardRef<
   <input
     type={type}
     className={cn(
-      "flex h-9 w-full rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-1 text-sm",
-      "shadow-[0_1px_0_rgba(255,255,255,0.03)_inset] transition-all duration-200",
-      "placeholder:text-muted-foreground/70",
-      "focus-ring focus:border-primary/40 focus:bg-white/[0.04] focus:shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]",
+      "flex h-10 w-full min-h-[40px] rounded-xl border border-white/15 bg-secondary/70 px-3 py-2 text-sm text-foreground",
+      "transition-colors duration-150",
+      "placeholder:text-muted-foreground",
+      "focus-ring focus:border-primary/50 focus:bg-secondary focus:ring-2 focus:ring-primary/20",
       "disabled:cursor-not-allowed disabled:opacity-50",
       "file:border-0 file:bg-transparent file:text-sm file:font-medium",
+      "[&::-webkit-calendar-picker-indicator]:opacity-80 [&::-webkit-calendar-picker-indicator]:cursor-pointer",
+      "[&::-webkit-calendar-picker-indicator]:invert-[0.85]",
       className
     )}
     ref={ref}

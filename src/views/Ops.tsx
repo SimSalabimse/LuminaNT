@@ -22,6 +22,7 @@ import { useDataStore } from "@/stores/data-store";
 import { useAppStore } from "@/stores/app-store";
 import { writeInboxFile, isTauri } from "@/lib/tauri";
 import { parsePhasesFromConfig, progressToNextPhase } from "@/lib/plan";
+import { parsePlaceTheseMd } from "@/lib/capital";
 import { cn, formatNokPlain, formatPct } from "@/lib/utils";
 import { SettleDesk } from "@/components/ops/SettleDesk";
 
@@ -340,25 +341,33 @@ export function Ops() {
                       </Badge>
                     ))}
                 </div>
-                <div className="prose-invert-soft rounded-lg border border-white/[0.06] bg-black/20 p-3 max-h-[360px] overflow-y-auto flex-1">
+                <div className="rounded-xl border border-white/[0.07] bg-black/25 p-3 max-h-[360px] overflow-y-auto flex-1">
                   {placeThese ? (
-                    <ReactMarkdown>{placeThese}</ReactMarkdown>
+                    <PlaceSlipPreview md={placeThese} />
                   ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No PLACE_THESE.md yet — run{" "}
+                    <p className="text-sm text-muted-foreground py-6 text-center">
+                      No place slip yet — run{" "}
                       <strong className="text-foreground">nt recommend</strong>.
                     </p>
                   )}
                 </div>
                 {placeThese && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="self-start"
-                    onClick={() => setView("bets")}
-                  >
-                    Review pending in Ledger →
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setView("shortlist")}
+                    >
+                      Open Shortlist →
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setView("bets")}
+                    >
+                      Ledger
+                    </Button>
+                  </div>
                 )}
               </div>
             )}
@@ -715,6 +724,60 @@ export function Ops() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Compact place-slip cards for Ops outbox (not raw markdown dump). */
+function PlaceSlipPreview({ md }: { md: string }) {
+  const cards = parsePlaceTheseMd(md);
+  if (cards.length === 0) {
+    return (
+      <pre className="text-[11px] font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed">
+        {md.slice(0, 1200)}
+        {md.length > 1200 ? "…" : ""}
+      </pre>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] text-muted-foreground mb-2">
+        {cards.length} selection{cards.length === 1 ? "" : "s"} · ranked for Shortlist
+      </p>
+      {cards.map((c, i) => (
+        <div
+          key={c.id}
+          className="rounded-xl border border-white/[0.08] bg-card/80 px-3 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1"
+        >
+          <span className="font-mono text-[11px] font-bold text-primary">#{i + 1}</span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium truncate">{c.match}</div>
+            <div className="text-[12px] text-muted-foreground truncate">{c.selection}</div>
+          </div>
+          <div className="font-mono text-xs tabular-nums text-muted-foreground">
+            {c.odds ? c.odds.toFixed(2) : "—"}
+          </div>
+          <div className="font-mono text-sm font-semibold text-primary tabular-nums">
+            {c.stake ? formatNokPlain(c.stake) : "—"}
+          </div>
+          {c.ev != null && (
+            <div
+              className={cn(
+                "font-mono text-xs tabular-nums",
+                c.ev >= 0 ? "text-profit" : "text-loss"
+              )}
+            >
+              {c.ev >= 0 ? "+" : ""}
+              {(c.ev * 100).toFixed(1)}%
+            </div>
+          )}
+          {c.grade && (
+            <Badge variant="outline" className="text-[10px]">
+              {c.grade}
+            </Badge>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

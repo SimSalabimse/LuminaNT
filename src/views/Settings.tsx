@@ -134,13 +134,16 @@ export function Settings() {
             onChange={(e) => setLocal((s) => ({ ...s, pythonCmd: e.target.value }))}
             placeholder="python or py or full path"
           />
-          <p className="text-xs text-muted-foreground flex gap-1.5">
+          <div className="text-xs text-muted-foreground flex gap-2 leading-relaxed">
             <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-            On Windows, commands run as{" "}
-            <code>{local.pythonCmd || "python"} run_nt.py …</code> (not{" "}
-            <code>-m nt</code> — that hits the builtin Windows <code>nt</code> module). Install
-            tracker deps with <code>pip install -r requirements.txt</code>.
-          </p>
+            <p>
+              On Windows, commands run as{" "}
+              <code className="text-foreground/90">{local.pythonCmd || "python"} run_nt.py …</code>
+              {" "}(not <code className="text-foreground/90">-m nt</code> — that hits the builtin
+              Windows <code className="text-foreground/90">nt</code> module). Install tracker deps
+              with <code className="text-foreground/90">pip install -r requirements.txt</code>.
+            </p>
+          </div>
         </div>
       </section>
 

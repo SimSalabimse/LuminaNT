@@ -1,6 +1,5 @@
 import { motion } from "framer-motion";
 import {
-  Activity,
   ChevronDown,
   Flame,
   Percent,
@@ -249,16 +248,13 @@ export function Dashboard() {
       {/* Hero: Current risk status + Next action — single source of truth */}
       <div
         className={cn(
-          "rounded-2xl border p-5 md:p-6 relative overflow-hidden",
-          "bg-gradient-to-br from-card/90 via-card/70 to-black/40",
+          "rounded-2xl border p-5 md:p-6 bg-card",
           next.urgent && "border-loss/35",
           !next.urgent && status.gate === "REDUCED" && "border-pending/30",
           !next.urgent && status.canBet && status.gate !== "REDUCED" && "border-primary/25",
           !status.canBet && !next.urgent && "border-white/[0.1]"
         )}
       >
-        <div className="absolute inset-x-12 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-
         <div className="flex flex-wrap items-start gap-5">
           <div className="flex-1 min-w-[220px] space-y-3">
             <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
@@ -590,130 +586,101 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Secondary pulse — kill-switch uses same gate as strip */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="glass rounded-2xl p-4 holo-border relative overflow-hidden">
-          <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-pending/15 blur-2xl pointer-events-none" />
-          <div className="flex items-center justify-between relative">
-            <div className="section-label flex items-center gap-1.5">
-              <Flame className="h-3.5 w-3.5 text-pending" />
-              Streak
-            </div>
-            <Badge variant="secondary" className="text-[10px]">
-              live
-            </Badge>
-          </div>
-          <div className="mt-2 text-3xl font-bold tabular-nums tracking-tight">
-            {metrics.currentStreak.type === "—"
-              ? "—"
-              : `${metrics.currentStreak.count}${metrics.currentStreak.type}`}
-          </div>
-          <p className="text-[12px] text-muted-foreground mt-1.5">
-            {metrics.bestDay
-              ? `Best day ${metrics.bestDay.date}: ${metrics.bestDay.pl >= 0 ? "+" : ""}${metrics.bestDay.pl.toFixed(1)}`
-              : "No settled days yet"}
-          </p>
-        </div>
-
-        <div className="glass rounded-2xl p-4 holo-border relative overflow-hidden">
-          <div className="absolute -left-4 bottom-0 h-16 w-16 rounded-full bg-primary/15 blur-2xl pointer-events-none" />
-          <div className="flex items-center justify-between relative">
-            <div className="section-label flex items-center gap-1.5">
-              <Shield className="h-3.5 w-3.5 text-primary" />
-              Risk gate
-            </div>
-            <div className="flex gap-1.5">
-              <span className="chip !py-0.5 !text-[10px]">
-                <Trophy className="h-3 w-3" /> {metrics.wins}W
-              </span>
-              <span className="chip !py-0.5 !text-[10px]">
-                <Percent className="h-3 w-3" /> {wrPct}%
-              </span>
-            </div>
-          </div>
-          <div
-            className={cn(
-              "mt-2 text-3xl font-bold tracking-tight",
-              status.canBet ? "text-profit" : "text-loss"
-            )}
-          >
-            {status.betLabel}
-          </div>
-          <p className="text-[12px] text-muted-foreground mt-1.5 leading-snug">
-            {status.reason}
-          </p>
-          <p className="text-[11px] text-muted-foreground/80 mt-1">
-            Mode {status.sizeMode} · open {formatNokPlain(status.openRisk)} · phase{" "}
-            {phase.phase_id ?? "—"}
-          </p>
-          {next.showUnfreeze && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-3 h-9 gap-1.5 border-amber-500/45 text-amber-100"
-              onClick={onUnfreeze}
-            >
-              <Unlock className="h-3.5 w-3.5" />
-              Unfreeze
-            </Button>
-          )}
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              className="chip chip-active !text-[10px]"
-              onClick={() => setView("calibration")}
-            >
-              <Activity className="h-3 w-3" /> Cal {snapshot?.calibration?.length ?? 0}
-            </button>
-            <button
-              type="button"
-              className="chip !text-[10px]"
-              onClick={() => setView("capital")}
-            >
-              Plan
-            </button>
-          </div>
-        </div>
-
-        <div className="glass rounded-2xl p-4 holo-border relative overflow-hidden sm:col-span-2 lg:col-span-1">
-          <div className="flex items-center justify-between mb-1">
-            <div className="section-label">Heatmap · 28d</div>
-            <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
-          </div>
-          <ChartPanel
-            title=""
-            option={heatmapSparkOption(heat)}
-            height={110}
-            className="!border-0 !shadow-none !bg-transparent !p-0 !backdrop-blur-none"
-          />
-        </div>
-      </div>
-
-      <div className="glass rounded-2xl overflow-hidden holo-border">
+      {/* Secondary signals — progressive disclosure */}
+      <div className="rounded-2xl border border-white/[0.08] bg-card overflow-hidden">
         <button
           type="button"
           onClick={() => setShowFluid((v) => !v)}
-          className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-white/[0.02] transition-colors"
+          className="w-full flex items-center justify-between px-5 py-3.5 text-left hover:bg-white/[0.02] transition-colors min-h-[48px]"
         >
-          <div>
-            <div className="text-sm font-semibold flex items-center gap-2">
-              Fluid P/L trajectory
-              <span className="inline-flex h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_8px_2px_rgba(201,162,39,0.7)]" />
-            </div>
-            <p className="text-[12px] text-muted-foreground mt-0.5">
-              Cumulative settled profit &amp; loss · expand for full ribbon
-            </p>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+            <span className="text-sm font-semibold">More signals</span>
+            <span className="text-[12px] text-muted-foreground font-mono">
+              Streak{" "}
+              {metrics.currentStreak.type === "—"
+                ? "—"
+                : `${metrics.currentStreak.count}${metrics.currentStreak.type}`}
+              {" · "}
+              Gate {status.betLabel}
+              {" · "}
+              Mode {status.sizeMode}
+            </span>
           </div>
           <ChevronDown
             className={cn(
-              "h-4 w-4 text-muted-foreground transition-transform",
+              "h-4 w-4 text-muted-foreground transition-transform shrink-0",
               showFluid && "rotate-180"
             )}
           />
         </button>
         {showFluid && (
-          <div className="px-4 pb-5 border-t border-white/[0.05]">
-            <FluidPlChart points={equityPts} height={320} className="mt-2 rounded-xl" />
+          <div className="border-t border-white/[0.06] px-4 pb-5 pt-4 space-y-4">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="rounded-xl border border-white/[0.07] bg-black/25 p-4">
+                <div className="section-label flex items-center gap-1.5">
+                  <Flame className="h-3.5 w-3.5 text-pending" />
+                  Streak
+                </div>
+                <div className="mt-2 text-2xl font-bold tabular-nums">
+                  {metrics.currentStreak.type === "—"
+                    ? "—"
+                    : `${metrics.currentStreak.count}${metrics.currentStreak.type}`}
+                </div>
+                <p className="text-[12px] text-muted-foreground mt-1">
+                  {metrics.bestDay
+                    ? `Best ${metrics.bestDay.date}: ${metrics.bestDay.pl >= 0 ? "+" : ""}${metrics.bestDay.pl.toFixed(1)}`
+                    : "No settled days yet"}
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/[0.07] bg-black/25 p-4">
+                <div className="section-label flex items-center gap-1.5">
+                  <Shield className="h-3.5 w-3.5 text-primary" />
+                  Risk gate
+                </div>
+                <div
+                  className={cn(
+                    "mt-2 text-2xl font-bold",
+                    status.canBet ? "text-profit" : "text-loss"
+                  )}
+                >
+                  {status.betLabel}
+                </div>
+                <p className="text-[12px] text-muted-foreground mt-1 leading-snug">
+                  {status.reason}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <span className="chip !text-[10px]">
+                    <Trophy className="h-3 w-3" /> {metrics.wins}W
+                  </span>
+                  <span className="chip !text-[10px]">
+                    <Percent className="h-3 w-3" /> {wrPct}%
+                  </span>
+                  <button
+                    type="button"
+                    className="chip !text-[10px]"
+                    onClick={() => setView("capital")}
+                  >
+                    Plan
+                  </button>
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/[0.07] bg-black/25 p-4 sm:col-span-2 lg:col-span-1">
+                <div className="section-label flex items-center gap-1.5 mb-2">
+                  <TrendingUp className="h-3.5 w-3.5" />
+                  Heatmap · 28d
+                </div>
+                <ChartPanel
+                  title=""
+                  option={heatmapSparkOption(heat)}
+                  height={100}
+                  className="!border-0 !shadow-none !bg-transparent !p-0 !backdrop-blur-none"
+                />
+              </div>
+            </div>
+            <div>
+              <div className="section-label mb-2">Fluid P/L trajectory</div>
+              <FluidPlChart points={equityPts} height={280} className="rounded-xl" />
+            </div>
           </div>
         )}
       </div>

@@ -134,18 +134,13 @@ export function Sidebar() {
 
       {/* Live equity */}
       {!collapsed && snap && (
-        <div className="mx-3 mb-3 rounded-2xl panel-tight !p-3.5 relative overflow-hidden holo-border">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.1] via-transparent to-violet/[0.1] pointer-events-none" />
-          <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-primary/20 blur-2xl pointer-events-none" />
+        <div className="mx-3 mb-3 rounded-xl border border-white/[0.08] bg-card p-3.5">
           <div className="relative">
-            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground uppercase tracking-[0.16em] font-semibold">
-              <span className="glow-dot" />
+            <div className="text-[10px] text-muted-foreground uppercase tracking-[0.14em] font-semibold">
               Live equity
             </div>
-            <div className="mt-2 text-[1.75rem] font-bold tabular-nums tracking-tight leading-none">
-              <span className="text-gradient-brand">
-                {equity != null ? Number(equity).toFixed(2) : "—"}
-              </span>
+            <div className="mt-2 text-[1.65rem] font-bold tabular-nums tracking-tight leading-none text-foreground">
+              {equity != null ? Number(equity).toFixed(2) : "—"}
               <span className="text-xs text-muted-foreground font-medium ml-1.5">NOK</span>
             </div>
             <div className="flex items-center gap-1.5 mt-3 flex-wrap">
@@ -283,23 +278,16 @@ export function Sidebar() {
                       {active && (
                         <motion.div
                           layoutId="nav-active-bar"
-                          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-full bg-gradient-to-b from-primary via-accent to-violet shadow-[0_0_14px_hsl(var(--primary))]"
+                          className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-full bg-primary"
                           transition={{ type: "spring", stiffness: 420, damping: 30 }}
                         />
                       )}
                       <Icon
-                        className={cn(
-                          "h-4 w-4 relative z-10 shrink-0",
-                          active && "drop-shadow-[0_0_10px_hsl(var(--primary)/0.7)]"
-                        )}
+                        className="h-4 w-4 relative z-10 shrink-0"
                         strokeWidth={active ? 2.1 : 1.7}
                       />
                       <span className="relative z-10 font-medium flex-1 text-left tracking-tight text-[13px]">
-                        {meta.label === "Desk"
-                          ? "Overview"
-                          : meta.label === "Ops" && vid === "workflow"
-                            ? "Hub"
-                            : meta.label}
+                        {meta.label}
                       </span>
                       {key && (
                         <Kbd className="relative z-10 opacity-25 group-hover:opacity-70 transition-opacity">
