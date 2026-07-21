@@ -67,6 +67,20 @@ export interface BankrollState {
   [key: string]: unknown;
 }
 
+export interface PhaseStateScores {
+  equity_score?: number;
+  dd_score?: number;
+  process_error_rate_14d?: number;
+  calibration_score?: number;
+  open_risk_concentration?: number;
+  learning_health?: number;
+  process_health_score?: number;
+  high_odds_stress_block?: boolean;
+  force_process_health?: boolean;
+  raw?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 export interface PhaseState {
   phase_id?: string;
   label?: string;
@@ -86,6 +100,14 @@ export interface PhaseState {
   reasons?: string[];
   equity_nok?: number;
   settled_count?: number;
+  phase_model?: string;
+  phase_state?: PhaseStateScores;
+  size_mode_floor?: string | null;
+  research_only?: boolean;
+  high_odds_stress_block?: boolean;
+  process_health_until?: string | null;
+  process_health_action?: string | null;
+  process_health_reason?: string | null;
   [key: string]: unknown;
 }
 
@@ -103,6 +125,42 @@ export interface RiskState {
   can_bet?: boolean;
   reasons?: string[];
   formula?: string;
+  size_mode?: string;
+  size_mode_capital?: string;
+  size_mode_floor?: string | null;
+  research_only?: boolean;
+  high_odds_stress_block?: boolean;
+  phase_health?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/** ControlSignals JSONL row (temp_gate_raise or revoke). */
+export interface ControlSignal {
+  kind?: string;
+  ts?: string;
+  expires_at?: string;
+  ttl_days?: number;
+  sport?: string;
+  market?: string | null;
+  min_ev_raise?: number;
+  force_confirmed_lineup?: boolean;
+  source?: string;
+  bet_id?: string | null;
+  process_root_cause?: string | null;
+  revoke_all?: boolean;
+  actor?: string;
+  reason?: string;
+  [key: string]: unknown;
+}
+
+export interface SettlementReview {
+  bet_id?: string;
+  ts?: string;
+  variance_class?: string;
+  research_quality_retro?: string;
+  process_root_cause?: string;
+  score?: string;
+  factors?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
@@ -264,6 +322,10 @@ export interface TrackerSnapshot {
   capital_segments?: Record<string, unknown>;
   /** stake_decisions.jsonl records */
   stake_decisions?: Array<Record<string, unknown>>;
+  /** ControlSignals (temp_gate_raise + revokes) */
+  control_signals?: ControlSignal[];
+  /** Settlement reviews (process_error, packet meta) */
+  settlement_reviews?: SettlementReview[];
 }
 
 export interface LearningBucket {

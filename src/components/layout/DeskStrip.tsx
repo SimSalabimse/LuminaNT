@@ -19,6 +19,7 @@ import {
   gateBadgeVariant,
   modeShellClass,
 } from "@/lib/riskStatus";
+import { phaseRadarDims, sizeModeWhy } from "@/lib/phaseRadar";
 
 /**
  * Capital strip — calm, scannable, mode-dominant.
@@ -111,6 +112,18 @@ export function DeskStrip() {
   const modeNotNormal =
     status.sizeMode === "REDUCED" || status.sizeMode === "FROZEN";
 
+  const radar = phaseRadarDims(phase as Parameters<typeof phaseRadarDims>[0]);
+  const whyMode = sizeModeWhy(
+    risk as Parameters<typeof sizeModeWhy>[0],
+    phase as Parameters<typeof sizeModeWhy>[1]
+  );
+  const capitalMode = String(risk.size_mode_capital || status.sizeMode || "").toUpperCase();
+  const modeMismatch =
+    capitalMode &&
+    status.sizeMode &&
+    capitalMode !== status.sizeMode &&
+    status.sizeMode !== "LEGACY";
+
   return (
     <div
       className={cn(
@@ -176,6 +189,7 @@ export function DeskStrip() {
             status.sizeMode === "FROZEN" && "border-loss/40 bg-loss/12",
             status.sizeMode === "LEGACY" && "border-white/10 bg-white/5"
           )}
+          title={whyMode.join("\n")}
         >
           <span className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
             Mode
@@ -190,7 +204,17 @@ export function DeskStrip() {
           >
             {status.sizeMode === "LEGACY" ? "—" : status.sizeMode}
           </span>
+          {modeMismatch && (
+            <span className="text-[9px] text-muted-foreground mt-0.5 font-mono">
+              cap {capitalMode}
+            </span>
+          )}
         </div>
+        {Boolean(phase.research_only) && (
+          <Badge variant="warning" className="h-8 text-[10px] font-bold">
+            RESEARCH_ONLY
+          </Badge>
+        )}
 
         {/* Can bet — large, single source of truth */}
         <div
@@ -290,6 +314,29 @@ export function DeskStrip() {
             tone={util >= 0.95 ? "loss" : util >= 0.8 ? "pending" : undefined}
           />
           <Sec label="Phase" value={String(phase.phase_id ?? "—")} />
+
+          {/* Phase health mini bars */}
+          <div className="flex items-end gap-1.5 h-8" title={whyMode.join(" · ")}>
+            {radar.map((d) => (
+              <div key={d.id} className="flex flex-col items-center gap-0.5 w-5" title={`${d.label}: ${d.rawLabel}`}>
+                <div className="w-full h-6 rounded-sm bg-black/40 border border-white/10 overflow-hidden flex items-end">
+                  <div
+                    className={cn(
+                      "w-full transition-all",
+                      d.tone === "ok" && "bg-profit/80",
+                      d.tone === "warn" && "bg-pending/80",
+                      d.tone === "loss" && "bg-loss/80",
+                      d.tone === "neutral" && "bg-white/25"
+                    )}
+                    style={{ height: `${Math.max(8, d.score)}%` }}
+                  />
+                </div>
+                <span className="text-[8px] text-muted-foreground leading-none">
+                  {d.label.slice(0, 3)}
+                </span>
+              </div>
+            ))}
+          </div>
 
           <div className="flex-1" />
 

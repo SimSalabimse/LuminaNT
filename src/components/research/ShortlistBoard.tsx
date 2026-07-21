@@ -22,6 +22,7 @@ import { useAppStore } from "@/stores/app-store";
 import { buildShortlistCards, type ShortlistCard } from "@/lib/capital";
 import { formatNokPlain, cn } from "@/lib/utils";
 import { deriveGateChips } from "@/lib/gateChips";
+import { activeControlSignals } from "@/lib/phaseRadar";
 import { deriveRiskStatus, modeBadgeVariant } from "@/lib/riskStatus";
 
 function StatusIcon({ status }: { status: ShortlistCard["status"] }) {
@@ -98,6 +99,14 @@ export function ShortlistBoard() {
   const status = useMemo(
     () => deriveRiskStatus(snapshot?.risk, snapshot?.bankroll, snapshot?.phase),
     [snapshot]
+  );
+
+  const activeSignals = useMemo(
+    () => activeControlSignals(snapshot?.control_signals || []),
+    [snapshot?.control_signals]
+  );
+  const highOddsStress = Boolean(
+    snapshot?.risk?.high_odds_stress_block || snapshot?.phase?.high_odds_stress_block
   );
 
   const cards = useMemo(
@@ -257,6 +266,9 @@ export function ShortlistBoard() {
                     sizeMode: c.sizeMode,
                     notes: c.notes,
                     statusReason: c.statusReason,
+                    sport: c.sport,
+                    activeSignals,
+                    highOddsStress,
                   }).map((chip) => (
                     <Badge
                       key={chip.id}

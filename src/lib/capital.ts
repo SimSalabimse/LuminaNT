@@ -24,6 +24,7 @@ export type ShortlistCard = {
   status: "open" | "win" | "loss" | "refunded" | "abandoned" | "planned" | "unknown";
   statusReason: string;
   notes: string;
+  sport?: string;
 };
 
 export function parsePlaceTheseMd(md: string): ShortlistCard[] {
@@ -152,6 +153,7 @@ export function buildShortlistCards(
       status,
       statusReason,
       notes,
+      sport: b.sport || "",
     });
   }
 
@@ -171,6 +173,7 @@ export function buildShortlistCards(
         stake: bet.stake_nok || c.stake,
         status,
         statusReason,
+        sport: bet.sport || c.sport || "",
       });
       seen.add(bet.bet_id);
     } else {

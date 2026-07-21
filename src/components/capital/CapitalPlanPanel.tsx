@@ -33,6 +33,8 @@ import {
   modeHeroClass,
   nextActionFor,
 } from "@/lib/riskStatus";
+import { phaseRadarDims, sizeModeWhy } from "@/lib/phaseRadar";
+import type { PhaseState, RiskState } from "@/types";
 
 function ProgressTrack({
   value,
@@ -122,10 +124,13 @@ export function CapitalPlanPanel() {
   const setToast = useAppStore((s) => s.setToast);
   const [busy, setBusy] = useState(false);
 
-  const risk = snapshot?.risk || {};
+  const risk = (snapshot?.risk || {}) as RiskState;
+  const phase = (snapshot?.phase || {}) as PhaseState;
   const segs = (snapshot?.capital_segments || {}) as Record<string, unknown>;
   const status = deriveRiskStatus(snapshot?.risk, snapshot?.bankroll, snapshot?.phase);
   const next = nextActionFor(status);
+  const radar = phaseRadarDims(phase);
+  const whyMode = sizeModeWhy(risk, phase);
 
   const equity = status.equity;
   const secure = status.secure;
@@ -234,6 +239,66 @@ export function CapitalPlanPanel() {
             >
               {status.betLabel}
             </Badge>
+          </div>
+        </div>
+
+        {/* Phase health radar + why size_mode */}
+        <div className="mt-6 grid md:grid-cols-2 gap-4">
+          <div className="rounded-xl border border-white/[0.08] bg-black/25 p-4 space-y-3">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+              Phase health
+            </div>
+            {radar.map((d) => (
+              <div key={d.id} className="space-y-1">
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-muted-foreground">{d.label}</span>
+                  <span className="font-mono tabular-nums text-muted-foreground">
+                    {d.rawLabel}
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-black/40 border border-white/[0.06] overflow-hidden">
+                  <div
+                    className={cn(
+                      "h-full rounded-full",
+                      d.tone === "ok" && "bg-profit/80",
+                      d.tone === "warn" && "bg-pending/80",
+                      d.tone === "loss" && "bg-loss/80",
+                      d.tone === "neutral" && "bg-white/25"
+                    )}
+                    style={{ width: `${d.score}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-xl border border-white/[0.08] bg-black/25 p-4 space-y-2">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+              Why this size_mode
+            </div>
+            <div className="text-sm font-mono font-bold">
+              {status.sizeMode}
+              {risk.size_mode_capital &&
+                String(risk.size_mode_capital).toUpperCase() !== status.sizeMode && (
+                  <span className="text-muted-foreground font-normal text-xs ml-2">
+                    (capital {String(risk.size_mode_capital)})
+                  </span>
+                )}
+            </div>
+            <ul className="space-y-1.5 max-h-40 overflow-y-auto">
+              {whyMode.map((line, i) => (
+                <li
+                  key={i}
+                  className="text-[11px] text-muted-foreground leading-snug border-l-2 border-primary/30 pl-2"
+                >
+                  {line}
+                </li>
+              ))}
+            </ul>
+            {phase.process_health_until && (
+              <p className="text-[11px] text-pending pt-1">
+                Process hold until {String(phase.process_health_until)}
+              </p>
+            )}
           </div>
         </div>
 

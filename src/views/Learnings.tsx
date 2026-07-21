@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { GraduationCap, TrendingDown, TrendingUp, Lightbulb } from "lucide-react";
 import { ChartPanel } from "@/components/charts/ChartPanel";
+import { ControlSignalsPanel } from "@/components/learning/ControlSignalsPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -708,6 +709,8 @@ export function LearningsPanel() {
           </Button>
         </div>
       </div>
+
+      <ControlSignalsPanel />
 
       <LearningProposalsPanel
         proposals={proposals}

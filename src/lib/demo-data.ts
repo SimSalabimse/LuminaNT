@@ -103,6 +103,8 @@ export async function loadDemoSnapshot(): Promise<TrackerSnapshot> {
       week_snapshot: { week_id: "2026-W30", liquid_start_nok: 500, unit_size_nok: 10 },
     },
     stake_decisions: [],
+    control_signals: [],
+    settlement_reviews: [],
     edges_summary_md: "",
     phase_plan_md: "",
     bankroll_plan_md: "",

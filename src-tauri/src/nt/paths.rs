@@ -48,6 +48,12 @@ pub fn settlement_reviews_jsonl(root: &Path) -> PathBuf {
         .join("settlement_reviews.jsonl")
 }
 
+pub fn control_signals_jsonl(root: &Path) -> PathBuf {
+    root.join("data")
+        .join("state")
+        .join("control_signals.jsonl")
+}
+
 pub fn edges_summary_md(root: &Path) -> PathBuf {
     root.join("data").join("state").join("edges_summary.md")
 }

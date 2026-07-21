@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { BookOpen, Crosshair, HelpCircle, MousePointerClick } from "lucide-react";
 import { useDataStore } from "@/stores/data-store";
+import { useAppStore } from "@/stores/app-store";
 import { analyzeCalibration, type GroupMetrics } from "@/lib/calibration";
 import { cn, formatPct } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,69 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { isTauri } from "@/lib/tauri";
+
+function ForceProcessReviewButton({
+  defaultSport,
+  label,
+}: {
+  defaultSport: string;
+  label: string;
+}) {
+  const runNt = useDataStore((s) => s.runNt);
+  const refresh = useDataStore((s) => s.refresh);
+  const demo = useAppStore((s) => s.settings.demoMode);
+  const setToast = useAppStore((s) => s.setToast);
+  const setError = useAppStore((s) => s.setError);
+  const [busy, setBusy] = useState(false);
+  const live = isTauri() && !demo;
+
+  const onForce = async () => {
+    if (!live) {
+      setToast("Force process review needs desktop + live tracker");
+      return;
+    }
+    const sport =
+      window.prompt("Sport for temp_gate_raise", defaultSport || "football") ||
+      "";
+    if (!sport.trim()) return;
+    setBusy(true);
+    try {
+      const res = await runNt([
+        "control-signals",
+        "emit",
+        "--sport",
+        sport.trim(),
+        "--source",
+        "force_review",
+        "--reason",
+        `calibration force_review: ${label}`,
+      ]);
+      if (res.exit_code !== 0 && res.ok === false) {
+        setError(res.stderr || "Emit failed");
+      } else {
+        setToast(`temp_gate_raise emitted for ${sport}`);
+        await refresh({ runNtRefresh: true });
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className="h-8 text-[11px] mt-2 border-pending/40 text-pending"
+      disabled={busy || !live}
+      onClick={() => void onForce()}
+    >
+      Force process review
+    </Button>
+  );
+}
 
 const GLOSSARY: { term: string; plain: string; detail?: string }[] = [
   {
@@ -439,11 +503,19 @@ export function CalibrationPanel() {
                     </li>
                   ))}
                 </ul>
+                <ForceProcessReviewButton
+                  defaultSport={
+                    report.force_review[0]?.dim === "sport"
+                      ? String(report.force_review[0]?.key || "football")
+                      : "football"
+                  }
+                  label={report.force_review[0]?.label || "calibration"}
+                />
               </div>
             )}
             <p className="text-[11px] text-muted-foreground mt-2">
-              Learning signal only — does not auto-change stakes. Process rules
-              stay in the engine.
+              Force process review emits a ControlSignal temp_gate_raise (engine).
+              Multipliers stay separate.
             </p>
           </div>
 

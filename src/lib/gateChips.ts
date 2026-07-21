@@ -1,6 +1,8 @@
 /**
  * Derive shortlist / case-file process gate chips from notes + grade + size_mode.
  */
+import type { ControlSignal } from "@/types";
+
 export type GateChip = {
   id: string;
   label: string;
@@ -13,6 +15,9 @@ export function deriveGateChips(input: {
   notes?: string | null;
   statusReason?: string | null;
   processGateRaise?: number | null;
+  sport?: string | null;
+  activeSignals?: ControlSignal[] | null;
+  highOddsStress?: boolean | null;
 }): GateChip[] {
   const chips: GateChip[] = [];
   const notes = `${input.notes || ""} ${input.statusReason || ""}`;
@@ -32,14 +37,37 @@ export function deriveGateChips(input: {
       tone: sm === "NORMAL" ? "ok" : sm === "REDUCED" ? "warn" : "loss",
     });
   }
-  if (/process_gate|process_error|process\+/i.test(notes) || (input.processGateRaise ?? 0) > 0) {
+  // Active ControlSignal temp_gate for this sport
+  const sp = (input.sport || "").toLowerCase();
+  const hit = (input.activeSignals || []).find(
+    (s) =>
+      s.kind === "temp_gate_raise" &&
+      sp &&
+      String(s.sport || "").toLowerCase() === sp
+  );
+  if (hit || (input.processGateRaise ?? 0) > 0) {
+    chips.push({
+      id: "temp_gate",
+      label: hit
+        ? `temp_gate +${hit.min_ev_raise ?? "?"}`
+        : "temp_gate",
+      tone: "warn",
+    });
+    if (hit?.force_confirmed_lineup) {
+      chips.push({ id: "xi", label: "XI confirmed", tone: "warn" });
+    }
+  }
+  if (/process_gate|process_error|process\+/i.test(notes)) {
     chips.push({ id: "process", label: "Process+EV", tone: "warn" });
   }
   if (/script_conflict|script /i.test(notes)) {
     chips.push({ id: "script", label: "Script", tone: "warn" });
   }
-  if (/soft correlation|max .* league|kickoff window/i.test(notes)) {
-    chips.push({ id: "corr", label: "Corr cap", tone: "warn" });
+  if (/soft correlation|max .* league|kickoff window|board_penalty|corr/i.test(notes)) {
+    chips.push({ id: "board", label: "board_penalty", tone: "warn" });
+  }
+  if (input.highOddsStress) {
+    chips.push({ id: "hi_block", label: "Hi-odds blocked", tone: "loss" });
   }
   if (/EXPLORE/i.test(notes)) {
     chips.push({ id: "explore", label: "Explore", tone: "primary" });

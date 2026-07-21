@@ -14,6 +14,10 @@ import {
 } from "@/lib/utils";
 import { marketFamilyLabel } from "@/lib/markets";
 import { isTauri, readTextFile } from "@/lib/tauri";
+import {
+  activeControlSignals,
+  parsePostSettlementPacket,
+} from "@/lib/phaseRadar";
 
 function parseNotesMeta(notes: string) {
   const out: {
@@ -126,6 +130,7 @@ export function CaseFileContent({ bet }: { bet: Bet }) {
   const setView = useAppStore((s) => s.setView);
   const drillForensic = useDataStore((s) => s.drillForensic);
   const setSelectedBetId = useDataStore((s) => s.setSelectedBetId);
+  const setFilters = useDataStore((s) => s.setFilters);
   const [pack, setPack] = useState<Record<string, unknown> | null>(null);
   const [packError, setPackError] = useState<string | null>(null);
   const [packLoading, setPackLoading] = useState(false);
@@ -717,6 +722,117 @@ export function CaseFileContent({ bet }: { bet: Bet }) {
             {bet.notes || "(no notes)"}
           </p>
         </div>
+      </Section>
+
+      {/* P0 PostSettlementPacket + process deep-dive */}
+      <Section title="8 · PostSettlementPacket">
+        {(() => {
+          const psp = parsePostSettlementPacket(bet.notes);
+          const review = (snapshot?.settlement_reviews || [])
+            .slice()
+            .reverse()
+            .find((r) => String(r.bet_id || "") === String(bet.bet_id));
+          const signals = activeControlSignals(snapshot?.control_signals || []).filter(
+            (s) =>
+              String(s.bet_id || "") === String(bet.bet_id) ||
+              (s.sport &&
+                bet.sport &&
+                String(s.sport).toLowerCase() === String(bet.sport).toLowerCase())
+          );
+          const hasPacket =
+            psp ||
+            review?.process_root_cause ||
+            (review && String(review.variance_class || "") === "process_error");
+
+          if (!hasPacket && !psp) {
+            return (
+              <p className="text-xs text-muted-foreground">
+                No packet (settled before P0, non-strict settle, or tags not set)
+              </p>
+            );
+          }
+
+          const score =
+            psp?.score ||
+            (review as { score?: string } | undefined)?.score ||
+            "—";
+          const xi = psp?.xi || "—";
+          const xiDelta = psp?.xi_delta || "—";
+          const script = psp?.script || "—";
+          const root =
+            psp?.root ||
+            String(review?.process_root_cause || "—");
+
+          return (
+            <div className="space-y-2">
+              <div className="grid sm:grid-cols-2 gap-x-4">
+                <Row label="actual_score" value={score} />
+                <Row label="actual_lineup_status" value={xi} />
+                <Row label="xi_delta" value={xiDelta} />
+                <Row label="script_realized" value={script} />
+                <Row label="process_root_cause" value={root} />
+                <Row
+                  label="variance_class"
+                  value={String(review?.variance_class || "—")}
+                />
+                <Row
+                  label="research_retro"
+                  value={String(review?.research_quality_retro || "—")}
+                />
+              </div>
+              {signals.length > 0 && (
+                <p className="text-[11px] text-pending">
+                  Linked ControlSignal: {signals[0].sport}
+                  {signals[0].market ? ` / ${signals[0].market}` : ""} · +
+                  {signals[0].min_ev_raise} EV · src={signals[0].source}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-[11px]"
+                  onClick={() => {
+                    const peers = allBets
+                      .filter(
+                        (b) =>
+                          b.result === "Loss" &&
+                          (b.sport || "").toLowerCase() ===
+                            (bet.sport || "").toLowerCase()
+                      )
+                      .map((b) => b.bet_id);
+                    drillForensic({
+                      dim: "process_peer",
+                      value: bet.sport || "",
+                      label: `Losses · ${bet.sport || "sport"}`,
+                      betIds: peers.length ? peers : [bet.bet_id],
+                      filterPatch: {
+                        sports: bet.sport ? [bet.sport] : [],
+                        results: ["Loss"],
+                      },
+                      targetView: "bets",
+                    });
+                  }}
+                >
+                  Similar sport losses
+                </Button>
+                {root && root !== "—" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-[11px]"
+                    onClick={() => {
+                      setFilters({ search: String(root) });
+                      setView("bets");
+                    }}
+                  >
+                    Search root cause
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </Section>
     </div>
   );

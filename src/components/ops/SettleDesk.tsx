@@ -51,7 +51,59 @@ export type SettleDraftRow = {
   key_events?: string;
   notes?: string;
   include?: boolean;
+  /** P0 PostSettlementPacket fields */
+  actual_lineup_status?: string;
+  predicted_vs_actual_xi_delta?: string;
+  script_realized?: string;
+  process_root_cause?: string;
 };
+
+/** Matches engine is_strict_packet_required */
+function needsStrictPacket(r: SettleDraftRow): boolean {
+  const tag = (r.variance_tag || "").trim().toLowerCase();
+  const retro = (r.research_quality_retro || "").trim().toLowerCase();
+  return (
+    ["process_error", "research_miss", "miss"].includes(tag) ||
+    ["poor", "wrong", "miss"].includes(retro)
+  );
+}
+
+function packetIncomplete(r: SettleDraftRow): string[] {
+  const errs: string[] = [];
+  if (!(r.score || "").trim()) errs.push("score");
+  if (!(r.actual_lineup_status || "").trim()) errs.push("lineup status");
+  if (!(r.predicted_vs_actual_xi_delta || "").trim()) errs.push("XI delta");
+  if (!(r.script_realized || "").trim()) errs.push("script realized");
+  if (!(r.process_root_cause || "").trim()) errs.push("root cause");
+  return errs;
+}
+
+const LINEUP_OPTS = [
+  { v: "", label: "—" },
+  { v: "confirmed", label: "Confirmed XI" },
+  { v: "predicted", label: "Predicted" },
+  { v: "unknown", label: "Unknown" },
+  { v: "n/a", label: "N/A (non-XI)" },
+];
+
+const SCRIPT_OPTS = [
+  { v: "", label: "—" },
+  { v: "agreed", label: "Script agreed" },
+  { v: "conflict", label: "Script conflict" },
+  { v: "unclear", label: "Unclear" },
+  { v: "n/a", label: "N/A" },
+];
+
+const ROOT_OPTS = [
+  { v: "", label: "—" },
+  { v: "lineup", label: "Lineup / XI" },
+  { v: "script", label: "Script miss" },
+  { v: "price", label: "Price / market" },
+  { v: "model", label: "Model / p_model" },
+  { v: "info", label: "Missing info" },
+  { v: "availability", label: "Availability" },
+  { v: "other", label: "Other" },
+];
 
 type SettleDraft = {
   n_pending: number;
@@ -189,10 +241,22 @@ export function SettleDesk() {
   };
 
   const included = rows.filter((r) => r.include && r.outcome);
+  const strictIncomplete = included.filter(
+    (r) => needsStrictPacket(r) && packetIncomplete(r).length > 0
+  );
+  const submitBlocked = strictIncomplete.length > 0;
 
   const submit = async () => {
     if (!included.length) {
       setError("Select at least one bet with an outcome");
+      return;
+    }
+    // P0 client fail-closed: process_error / poor retro need packet fields
+    if (submitBlocked) {
+      const sample = strictIncomplete[0];
+      setError(
+        `PostSettlementPacket required for process_error/poor retro (${sample.bet_id}): missing ${packetIncomplete(sample).join(", ")}`
+      );
       return;
     }
     if (demo || !isTauri()) {
@@ -208,6 +272,7 @@ export function SettleDesk() {
         bet_id: r.bet_id,
         outcome: r.outcome,
         score: r.score || undefined,
+        actual_score: r.score || undefined,
         variance_tag: r.variance_tag || undefined,
         research_quality_retro: r.research_quality_retro || undefined,
         confidence_retro: r.confidence_retro
@@ -215,6 +280,10 @@ export function SettleDesk() {
           : undefined,
         key_events: r.key_events || undefined,
         notes: r.notes || undefined,
+        actual_lineup_status: r.actual_lineup_status || undefined,
+        predicted_vs_actual_xi_delta: r.predicted_vs_actual_xi_delta || undefined,
+        script_realized: r.script_realized || undefined,
+        process_root_cause: r.process_root_cause || undefined,
         auto_fetched: Boolean(
           r.suggested_outcome && r.outcome === r.suggested_outcome
         ),
@@ -283,9 +352,9 @@ export function SettleDesk() {
             Smart settle
           </h3>
           <p className="text-[11px] text-muted-foreground mt-0.5 max-w-xl">
-            Batch-settle pending bets with score, variance vs skill, and research
-            retro. Auto-fetch assists football where possible. Engine fail-closed
-            on ambiguous match without bet_id.
+            Batch-settle with score, variance vs skill, and research retro.
+            Process-error / poor retro requires PostSettlementPacket (XI, script,
+            root cause). Engine fail-closed on incomplete packet or ambiguous match.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -323,7 +392,14 @@ export function SettleDesk() {
           </Button>
           <Button
             size="sm"
-            disabled={submitting || !included.length || demo}
+            disabled={
+              submitting || !included.length || demo || submitBlocked
+            }
+            title={
+              submitBlocked
+                ? "Fill PostSettlementPacket fields for process_error / poor rows"
+                : undefined
+            }
             onClick={() => submit()}
             className="h-8 gap-1.5"
           >
@@ -399,14 +475,18 @@ export function SettleDesk() {
           {rows.map((r) => {
             const odds = Number(r.decimal_odds) || 0;
             const stake = Number(r.stake_nok) || 0;
+            const strictBad =
+              r.include && needsStrictPacket(r) && packetIncomplete(r).length > 0;
             return (
               <div
                 key={r.bet_id}
                 className={cn(
                   "rounded-xl border p-3 space-y-2 transition-colors",
-                  r.include
-                    ? "border-primary/35 bg-primary/[0.06]"
-                    : "border-white/[0.06] bg-black/20"
+                  strictBad
+                    ? "border-loss/50 bg-loss/[0.07] ring-1 ring-loss/30"
+                    : r.include
+                      ? "border-primary/35 bg-primary/[0.06]"
+                      : "border-white/[0.06] bg-black/20"
                 )}
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -570,6 +650,96 @@ export function SettleDesk() {
                     />
                   </div>
                 </div>
+
+                {needsStrictPacket(r) && (
+                  <div className="rounded-lg border border-loss/40 bg-loss/5 p-2 space-y-2">
+                    <p className="text-[10px] font-semibold text-loss uppercase tracking-wide">
+                      PostSettlementPacket required
+                      {packetIncomplete(r).length > 0 && (
+                        <span className="font-normal normal-case ml-1">
+                          · missing {packetIncomplete(r).join(", ")}
+                        </span>
+                      )}
+                    </p>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                      <div>
+                        <Label className="text-[10px] text-muted-foreground">
+                          Actual lineup status
+                        </Label>
+                        <select
+                          className="w-full h-7 text-xs rounded-md border border-border bg-background px-2"
+                          value={r.actual_lineup_status || ""}
+                          onChange={(e) =>
+                            patchRow(r.bet_id, {
+                              actual_lineup_status: e.target.value,
+                            })
+                          }
+                        >
+                          {LINEUP_OPTS.map((o) => (
+                            <option key={o.v || "none"} value={o.v}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <Label className="text-[10px] text-muted-foreground">
+                          Predicted vs actual XI
+                        </Label>
+                        <Input
+                          className="h-7 text-xs"
+                          placeholder="n/a or who differed"
+                          value={r.predicted_vs_actual_xi_delta || ""}
+                          onChange={(e) =>
+                            patchRow(r.bet_id, {
+                              predicted_vs_actual_xi_delta: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[10px] text-muted-foreground">
+                          Script realized
+                        </Label>
+                        <select
+                          className="w-full h-7 text-xs rounded-md border border-border bg-background px-2"
+                          value={r.script_realized || ""}
+                          onChange={(e) =>
+                            patchRow(r.bet_id, {
+                              script_realized: e.target.value,
+                            })
+                          }
+                        >
+                          {SCRIPT_OPTS.map((o) => (
+                            <option key={o.v || "none"} value={o.v}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <Label className="text-[10px] text-muted-foreground">
+                          Process root cause
+                        </Label>
+                        <select
+                          className="w-full h-7 text-xs rounded-md border border-border bg-background px-2"
+                          value={r.process_root_cause || ""}
+                          onChange={(e) =>
+                            patchRow(r.bet_id, {
+                              process_root_cause: e.target.value,
+                            })
+                          }
+                        >
+                          {ROOT_OPTS.map((o) => (
+                            <option key={o.v || "none"} value={o.v}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}

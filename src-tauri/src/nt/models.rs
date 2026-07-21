@@ -82,4 +82,10 @@ pub struct TrackerSnapshot {
     /// Append-only stake decision audit lines
     #[serde(default)]
     pub stake_decisions: Vec<Value>,
+    /// ControlSignals JSONL (temp_gate_raise + revokes)
+    #[serde(default)]
+    pub control_signals: Vec<Value>,
+    /// Settlement reviews JSONL (process_error labels, packets)
+    #[serde(default)]
+    pub settlement_reviews: Vec<Value>,
 }
