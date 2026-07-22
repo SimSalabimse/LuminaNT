@@ -15,6 +15,7 @@ import {
 import { ChartPanel } from "@/components/charts/ChartPanel";
 import { FluidPlChart } from "@/components/charts/FluidPlChart";
 import { OpenRiskConcentration } from "@/components/dashboard/OpenRiskConcentration";
+import { DayStartChecklist } from "@/components/dashboard/DayStartChecklist";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
@@ -369,6 +370,9 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Day-start process checklist (session/day localStorage) */}
+      <DayStartChecklist />
 
       {/* Performance KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
