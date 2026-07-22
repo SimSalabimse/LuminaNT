@@ -2,6 +2,7 @@
  * Deep queue composition bars — preferred ≥55% / short-main ≤25%.
  * SSOT: `data/state/deep_queue.json` via snapshot.deep_queue only.
  * Never invent shares; null-safe when file missing or empty.
+ * HV v3: surface clearability_score + track when engine writes them (optional).
  */
 import { Layers } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -76,6 +77,13 @@ function shareToBarWidth(share: number | null): number {
   return Math.max(0, Math.min(100, n * 100));
 }
 
+function formatClearability(v: unknown): string | null {
+  if (v == null) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return n.toFixed(1);
+}
+
 export type DeepQueuePanelProps = {
   className?: string;
   /** Show optional queue line list under the bars (engine lines only). */
@@ -129,6 +137,11 @@ export function DeepQueuePanel({
       : queue.length > 0
         ? queue.length
         : null;
+  const anyScores = queue.some(
+    (line) =>
+      formatClearability(line.clearability_score) != null ||
+      (line.track != null && String(line.track).trim() !== "")
+  );
 
   return (
     <div
@@ -229,43 +242,75 @@ export function DeepQueuePanel({
                 Queue lines
               </div>
               <ul className="max-h-48 overflow-y-auto divide-y divide-white/[0.04]">
-                {queue.slice(0, 12).map((line, i) => (
-                  <li
-                    key={`${i}-${String(line.match ?? "").slice(0, 24)}`}
-                    className="px-5 py-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[12px]"
-                  >
-                    <span className="font-medium min-w-0 flex-1 line-clamp-1">
-                      {String(line.match || "—")}
-                    </span>
-                    <span className="text-muted-foreground font-mono tabular-nums shrink-0">
-                      {line.decimal_odds != null &&
-                      Number.isFinite(Number(line.decimal_odds))
-                        ? Number(line.decimal_odds).toFixed(2)
-                        : "—"}
-                    </span>
-                    <span className="flex gap-1 shrink-0">
-                      {line.preferred ? (
-                        <Badge
-                          variant="success"
-                          className="h-5 px-1.5 text-[10px]"
+                {queue.slice(0, 12).map((line, i) => {
+                  const cl = formatClearability(line.clearability_score);
+                  const track =
+                    line.track != null && String(line.track).trim() !== ""
+                      ? String(line.track).trim()
+                      : null;
+                  return (
+                    <li
+                      key={`${i}-${String(line.match ?? "").slice(0, 24)}`}
+                      className="px-5 py-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[12px]"
+                    >
+                      <span className="font-medium min-w-0 flex-1 line-clamp-1">
+                        {String(line.match || "—")}
+                      </span>
+                      <span className="text-muted-foreground font-mono tabular-nums shrink-0">
+                        {line.decimal_odds != null &&
+                        Number.isFinite(Number(line.decimal_odds))
+                          ? Number(line.decimal_odds).toFixed(2)
+                          : "—"}
+                      </span>
+                      {anyScores && cl != null && (
+                        <span
+                          className="font-mono tabular-nums text-[11px] text-primary/90 shrink-0"
+                          title="clearability_score (engine)"
                         >
-                          pref
-                        </Badge>
-                      ) : null}
-                      {line.short_main ? (
-                        <Badge
-                          variant="warning"
-                          className="h-5 px-1.5 text-[10px]"
-                        >
-                          sm
-                        </Badge>
-                      ) : null}
-                    </span>
-                    <span className="w-full text-[11px] text-muted-foreground line-clamp-1 font-mono">
-                      {String(line.selection || "")}
-                    </span>
-                  </li>
-                ))}
+                          cl {cl}
+                        </span>
+                      )}
+                      <span className="flex gap-1 shrink-0">
+                        {track ? (
+                          <Badge
+                            variant="outline"
+                            className="h-5 px-1.5 text-[10px] font-mono"
+                            title="queue track (engine)"
+                          >
+                            {track}
+                          </Badge>
+                        ) : null}
+                        {line.preferred ? (
+                          <Badge
+                            variant="success"
+                            className="h-5 px-1.5 text-[10px]"
+                          >
+                            pref
+                          </Badge>
+                        ) : null}
+                        {line.short_main ? (
+                          <Badge
+                            variant="warning"
+                            className="h-5 px-1.5 text-[10px]"
+                          >
+                            sm
+                          </Badge>
+                        ) : null}
+                        {line.inject ? (
+                          <Badge
+                            variant="secondary"
+                            className="h-5 px-1.5 text-[10px]"
+                          >
+                            inj
+                          </Badge>
+                        ) : null}
+                      </span>
+                      <span className="w-full text-[11px] text-muted-foreground line-clamp-1 font-mono">
+                        {String(line.selection || "")}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
               {queue.length > 12 && (
                 <div className="px-5 py-1.5 text-[11px] text-muted-foreground border-t border-white/[0.04]">
