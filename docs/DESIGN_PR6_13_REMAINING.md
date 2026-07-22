@@ -17,7 +17,7 @@ This note is the implementation backlog for the deferred train.
 | G8 | Deep queue composition not in coverage_health; no UI | **Med** | `light_research` only | PR8a coverage panel; PR8b via `data/state/deep_queue.json` (D17) |
 | G9 | README unqualified empty-slip success | **Med** | README | **DONE PR4** |
 | G10 | LUMINA_INTEGRATION example Calibration/cap40; PACKAGE formula â€œCal 40â€ residue | **Low** | engine docs | Tracker chore (not Lumina merge) |
-| G11 | Professional standards capital_v2 â€œOFFâ€ | **Low** | checklist | PR11 |
+| G11 | Professional standards capital_v2 “OFF” | **Low** | checklist | **DONE PR11** (this train: LIVE + regime/coverage/empty-slip/board-first) |
 | G12 | Settlement-day forensic drill debt | **Low** | checklist | PR12 |
 | G13 | Tauri FS `**` | **Med** | capabilities | PR10 runtime allowlist |
 | G14 | place-ack not on Shortlist Pending | **Med** | Shortlist | PR7 |
@@ -116,12 +116,12 @@ This note is the implementation backlog for the deferred train.
 
 ---
 
-### PR11 â€” Lumina docs / standards sync
+### PR11 â€” Lumina docs / standards sync — **DONE**
 
 - **Title:** `docs: standards checklist package + capital_v2 live`
-- **Files:** `PROFESSIONAL_STANDARDS_CHECKLIST.md`, README cross-links
-- **Dependencies:** After PR1â€“4 preferred
-- **Description:** Capital_v2 live, Exploration, coverage. **Note:** `LUMINA_INTEGRATION.md` + PACKAGE â€œCal 40â€ formula line are **tracker-repo** chores (G10), not this PR unless monorepo access.
+- **Files:** `PROFESSIONAL_STANDARDS_CHECKLIST.md`, README cross-links, PHASE2 status, this gap map (G11)
+- **Dependencies:** After PR1–4 preferred
+- **Description:** Capital_v2 **LIVE**, Exploration→Survival→Normal, coverage health / empty-slip / board-first Ops documented. **Note:** `LUMINA_INTEGRATION.md` + PACKAGE “Cal 40” formula line remain **tracker-repo** chores (G10).
 
 ---
 

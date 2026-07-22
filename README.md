@@ -226,7 +226,23 @@ LuminaNT/
 1. **Code is law** — display and orchestrate, don’t reimplement staking.  
 2. **Empty slip is success when coverage is healthy and `shortlist_with_deep_n` ≥ 1** — honest no-edge after deep research. Starvation and coverage problems surface as **no-research / process-miss** kinds (never success): zero shortlist deep packs → `no_research`; warn → soft miss; critical / `empty_slip_risk` → process miss; missing Coverage Health → fail-closed unavailable.  
 3. **Never hide detail** — notes, evidence, and edges stay one click away.  
-4. **Local first** — ledger stays on disk; only optional AI calls leave the machine.
+4. **Local first** — ledger stays on disk; only optional AI calls leave the machine.  
+5. **capital_v2 LIVE** — SECURE / size_mode / unit / open & loss rooms / Unfreeze come from engine `risk.json` when `capital_v2_enabled` is true; Lumina never invents those numbers.  
+6. **Bankroll regime** — package law is **Exploration → Survival → Normal**. Legacy disk `calibration` is STALE (label *Exploration (legacy)* only; never map `calibration_exit` → package Exploration exit).  
+7. **Board-first Ops** — run research **board** before live recommend; D14 sticky freshness refuses stale odds (dry-run still inspectable).
+
+---
+
+## Docs
+
+| Doc | What it covers |
+|-----|----------------|
+| [`docs/PROFESSIONAL_STANDARDS_CHECKLIST.md`](docs/PROFESSIONAL_STANDARDS_CHECKLIST.md) | Living operator/engineering standards (capital_v2 live, regime, coverage, empty-slip, board-first) |
+| [`docs/DESIGN_PR6_13_REMAINING.md`](docs/DESIGN_PR6_13_REMAINING.md) | Deferred PR6–13 backlog (explore chip, coverage panel, security, …) |
+| [`docs/PHASE2_CAPITAL_UI.md`](docs/PHASE2_CAPITAL_UI.md) | Plan / Shortlist / Desk capital_v2 UI |
+| [`docs/PHASE1_CAPITAL_STRIP.md`](docs/PHASE1_CAPITAL_STRIP.md) | Strip ranking, result taxonomy, chart discipline |
+| [`docs/PHASE1_CHECKPOINT_OPEN_RISK_AND_SETTLEMENT_DAY.md`](docs/PHASE1_CHECKPOINT_OPEN_RISK_AND_SETTLEMENT_DAY.md) | Open risk + settlement-day checkpoint |
+| [`docs/PHASE0_DIAGNOSTIC.md`](docs/PHASE0_DIAGNOSTIC.md) | Early desk diagnostic |
 
 ---
 

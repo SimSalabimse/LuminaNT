@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-21  
 **App:** LuminaNT  
-**Status:** Implemented (flag-on ready)
+**Status:** Implemented — **capital_v2 LIVE** (desk/Plan/Shortlist when engine `capital_v2_enabled`; see [`PROFESSIONAL_STANDARDS_CHECKLIST.md`](./PROFESSIONAL_STANDARDS_CHECKLIST.md))
 
 ## What changed
 
