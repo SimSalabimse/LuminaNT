@@ -147,7 +147,7 @@ export function DeskStrip() {
       {demo && (
         <div
           role="status"
-          className="px-4 py-1.5 text-center text-[12px] font-semibold tracking-wide border-b bg-pending/15 border-pending/30 text-pending"
+          className="px-4 py-1.5 text-center text-[12px] font-semibold tracking-wide border-b bg-pending/12 border-pending/30 text-pending"
         >
           DEMO — read-only training snapshot · mutators disabled · not live money
         </div>

@@ -53,7 +53,7 @@
         "top_open_share": 1.0,
         "open_stake_total": 10.0,
         "n_blocked_sports": 0,
-        "n_sports": 0,
+        "n_sports": 1,
         "dd_from_peak": 0.0,
         "cal_poor": false
       }
