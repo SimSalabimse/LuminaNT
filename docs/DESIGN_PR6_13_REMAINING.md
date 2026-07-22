@@ -3,7 +3,7 @@
 Source: grok-design-doc-67eedbcd.md (rev5).  
 Shipped on main as of 2026-07-22: **PR1â€“PR5** (Exploration/stale risk, fingerprint, demo package, empty-slip, Ops board-first).
 
-This note is the implementation backlog for the deferred train.
+Shipped on main via execute-plan **bea3efca** (2026-07-22). All PR6–13 items below are implemented and stacked.
 
 ## Gap map (from design)
 
@@ -151,4 +151,5 @@ PR8b after tracker deep_queue.json export (independent train)
 **Optional desk alerts:** PR13 (D18)
 
 ---
+
 
