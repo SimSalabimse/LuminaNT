@@ -124,7 +124,7 @@ export function Dashboard() {
     const equityPts = equityCurve(bets, baseline, dateMode);
     const settled = bets.filter((b) => isSettled(b.result));
     const bySport = breakdownBy(settled, "sport");
-    const heat = calendarHeatmap(bets);
+    const heat = calendarHeatmap(bets, dateMode);
     return { equityPts, bySport, heat };
   }, [bets, baseline, dateMode]);
 

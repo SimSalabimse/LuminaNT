@@ -183,12 +183,26 @@ export function edgeDecaySeries(
     });
 }
 
+/**
+ * Calendar day for a bet under match-kickoff or settlement (Europe/Oslo) semantics.
+ * Settlement mode matches equity/daily charts and risk kill-switch day.
+ */
+export function betCalendarDay(
+  b: Bet,
+  mode: EquityDateMode = "settlement"
+): string {
+  if (mode === "match") return (b.date || "").slice(0, 10);
+  return settlementCalendarDay(b) || (b.date || "").slice(0, 10);
+}
+
 /** Collect bet_ids for a dimension value (client-side grain aggregate). */
 export function betIdsForDim(
   bets: Bet[],
   dim: string,
-  value: string
+  value: string,
+  opts?: { dateMode?: EquityDateMode }
 ): string[] {
+  const dateMode = opts?.dateMode ?? "settlement";
   return bets
     .filter((b) => {
       if (dim === "sport") return (b.sport || "(empty)") === value;
@@ -206,7 +220,7 @@ export function betIdsForDim(
         const bucket = b.decimal_odds > 2.5 ? "odds > 2.5" : "odds ≤ 2.5";
         return bucket === value;
       }
-      if (dim === "date") return b.date === value;
+      if (dim === "date") return betCalendarDay(b, dateMode) === value;
       return false;
     })
     .map((b) => b.bet_id)
@@ -345,11 +359,6 @@ export function computeMetrics(bets: Bet[], baseline = 500): DerivedMetrics {
   };
 }
 
-function dayKey(b: Bet, mode: EquityDateMode): string {
-  if (mode === "match") return (b.date || "").slice(0, 10);
-  return settlementCalendarDay(b) || (b.date || "").slice(0, 10);
-}
-
 /**
  * Equity path for charts.
  * @param dateMode default **settlement** (Europe/Oslo via updated_at) — same “today”
@@ -362,7 +371,7 @@ export function equityCurve(
 ): EquityPoint[] {
   const settled = [...bets]
     .filter((b) => isSettled(b.result))
-    .map((b) => ({ b, d: dayKey(b, dateMode) }))
+    .map((b) => ({ b, d: betCalendarDay(b, dateMode) }))
     .filter((x) => x.d)
     .sort((a, b) => {
       if (a.d !== b.d) return a.d.localeCompare(b.d);
@@ -408,7 +417,7 @@ export function dailyPl(
 ): { date: string; pl: number; wins: number; losses: number }[] {
   const map = new Map<string, { pl: number; wins: number; losses: number }>();
   for (const b of bets.filter((x) => isSettled(x.result))) {
-    const d = dayKey(b, dateMode);
+    const d = betCalendarDay(b, dateMode);
     if (!d) continue;
     const cur = map.get(d) || { pl: 0, wins: 0, losses: 0 };
     cur.pl += b.p_l_nok || 0;
@@ -625,14 +634,17 @@ export function histogram(
 }
 
 export function calendarHeatmap(
-  bets: Bet[]
+  bets: Bet[],
+  dateMode: EquityDateMode = "settlement"
 ): { date: string; pl: number; count: number }[] {
   const map = new Map<string, { pl: number; count: number }>();
   for (const b of bets.filter((x) => isSettled(x.result))) {
-    const cur = map.get(b.date) || { pl: 0, count: 0 };
+    const d = betCalendarDay(b, dateMode);
+    if (!d) continue;
+    const cur = map.get(d) || { pl: 0, count: 0 };
     cur.pl += b.p_l_nok || 0;
     cur.count++;
-    map.set(b.date, cur);
+    map.set(d, cur);
   }
   return Array.from(map.entries())
     .map(([date, v]) => ({ date, ...v }))
@@ -641,18 +653,26 @@ export function calendarHeatmap(
 
 export function rollingWinRate(
   bets: Bet[],
-  window = 20
+  window = 20,
+  dateMode: EquityDateMode = "settlement"
 ): { date: string; winRate: number; n: number }[] {
   const settled = [...bets]
     .filter((b) => isSettled(b.result) && (isWin(b.result) || isLoss(b.result)))
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .map((b) => ({ b, d: betCalendarDay(b, dateMode) }))
+    .filter((x) => x.d)
+    .sort((a, c) => {
+      if (a.d !== c.d) return a.d.localeCompare(c.d);
+      return (a.b.updated_at || a.b.created_at || "").localeCompare(
+        c.b.updated_at || c.b.created_at || ""
+      );
+    });
 
   const out: { date: string; winRate: number; n: number }[] = [];
   for (let i = 0; i < settled.length; i++) {
     const slice = settled.slice(Math.max(0, i - window + 1), i + 1);
-    const wins = slice.filter((b) => isWin(b.result)).length;
+    const wins = slice.filter((x) => isWin(x.b.result)).length;
     out.push({
-      date: settled[i].date,
+      date: settled[i].d,
       winRate: wins / slice.length,
       n: slice.length,
     });
@@ -662,19 +682,27 @@ export function rollingWinRate(
 
 export function rollingRoi(
   bets: Bet[],
-  window = 20
+  window = 20,
+  dateMode: EquityDateMode = "settlement"
 ): { date: string; roi: number; n: number }[] {
   const settled = [...bets]
     .filter((b) => isSettled(b.result))
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .map((b) => ({ b, d: betCalendarDay(b, dateMode) }))
+    .filter((x) => x.d)
+    .sort((a, c) => {
+      if (a.d !== c.d) return a.d.localeCompare(c.d);
+      return (a.b.updated_at || a.b.created_at || "").localeCompare(
+        c.b.updated_at || c.b.created_at || ""
+      );
+    });
 
   const out: { date: string; roi: number; n: number }[] = [];
   for (let i = 0; i < settled.length; i++) {
     const slice = settled.slice(Math.max(0, i - window + 1), i + 1);
-    const pl = slice.reduce((s, b) => s + b.p_l_nok, 0);
-    const staked = slice.reduce((s, b) => s + b.stake_nok, 0);
+    const pl = slice.reduce((s, x) => s + x.b.p_l_nok, 0);
+    const staked = slice.reduce((s, x) => s + x.b.stake_nok, 0);
     out.push({
-      date: settled[i].date,
+      date: settled[i].d,
       roi: staked > 0 ? pl / staked : 0,
       n: slice.length,
     });

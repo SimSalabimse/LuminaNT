@@ -13,6 +13,7 @@ import {
   rollingWinRate,
   rollingRoi,
   betIdsForDim,
+  betCalendarDay,
   periodWindows,
   computeMetrics,
   type EquityDateMode,
@@ -100,8 +101,10 @@ export function PerformancePanel() {
     ) {
       return;
     }
-    // Grain from full ledger so drill is complete even when viewing a slice
-    const ids = betIdsForDim(allBets, dimName, value);
+    // Grain from full ledger so drill is complete even when viewing a slice.
+    // Date dim respects day-axis mode (settlement vs match) so bar/calendar
+    // clicks match the chart bucket that was clicked.
+    const ids = betIdsForDim(allBets, dimName, value, { dateMode });
     const label = prettyLabel || `${dimName}: ${value}`;
     const filterPatch: Record<string, string[]> = {};
     if (dimName === "sport") filterPatch.sports = [value];
@@ -111,12 +114,20 @@ export function PerformancePanel() {
     if (dimName === "market_family") filterPatch.marketTypes = [value];
     if (dimName === "result") filterPatch.results = [value];
     if (dimName === "date") {
+      const settlement = dateMode === "settlement";
       drillForensic({
         dim: dimName,
         value,
-        label: `Date ${value}`,
+        label: settlement
+          ? `Settlement day ${value}`
+          : `Match date ${value}`,
         betIds: ids,
-        filterPatch: { dateFrom: value, dateTo: value },
+        // dateFrom/dateTo filter match kickoff `b.date` only — do not apply
+        // them for settlement-day grain (betIds are the source of truth).
+        // Clear any prior match-date range so it cannot exclude settlement grain.
+        filterPatch: settlement
+          ? { dateFrom: "", dateTo: "" }
+          : { dateFrom: value, dateTo: value },
       });
       return;
     }
@@ -177,16 +188,22 @@ export function PerformancePanel() {
         chartColors.accent
       ),
       wr: trendLineOption(
-        rollingWinRate(bets, 20).map((p) => ({ date: p.date, value: p.winRate })),
+        rollingWinRate(bets, 20, dateMode).map((p) => ({
+          date: p.date,
+          value: p.winRate,
+        })),
         "Win rate (20)",
         true
       ),
       roi: trendLineOption(
-        rollingRoi(bets, 20).map((p) => ({ date: p.date, value: p.roi })),
+        rollingRoi(bets, 20, dateMode).map((p) => ({
+          date: p.date,
+          value: p.roi,
+        })),
         "ROI (20)",
         true
       ),
-      cal: calendarHeatOption(calendarHeatmap(bets)),
+      cal: calendarHeatOption(calendarHeatmap(bets, dateMode)),
       sport: breakdownBarOption(breakdownBy(settled, "sport"), "pl"),
       phase: breakdownBarOption(breakdownBy(settled, "phase"), "roi"),
       grade: breakdownBarOption(breakdownBy(settled, "research_grade"), "pl"),
@@ -206,16 +223,20 @@ export function PerformancePanel() {
     };
   }, [bets, baseline, dim, dateMode, dateModeLabel]);
 
-  /** Period compare uses the SAME scoped bet set as KPIs/charts (date windows only). */
+  /** Period compare uses the SAME scoped bet set + day axis as charts. */
   const compare = useMemo(() => {
     if (!showCompare) return null;
     const w = periodWindows(14);
-    const a = bets.filter((b) => b.date >= w.aFrom && b.date <= w.aTo);
-    const b = bets.filter((b) => b.date >= w.bFrom && b.date <= w.bTo);
+    const inWin = (b: Bet, from: string, to: string) => {
+      const d = betCalendarDay(b, dateMode);
+      return !!d && d >= from && d <= to;
+    };
+    const a = bets.filter((b) => inWin(b, w.aFrom, w.aTo));
+    const b = bets.filter((b) => inWin(b, w.bFrom, w.bTo));
     const ma = computeMetrics(a, baseline);
     const mb = computeMetrics(b, baseline);
     return { w, ma, mb, aN: a.length, bN: b.length };
-  }, [showCompare, bets, baseline]);
+  }, [showCompare, bets, baseline, dateMode]);
 
   const exportReport = () => {
     const report = {
@@ -515,7 +536,7 @@ export function PerformancePanel() {
         <div className="page-section-title">Calendar</div>
         <ChartPanel
           title="Performance calendar"
-          subtitle="Click a day → tickets for that date"
+          subtitle={`Click a day → tickets (${dateMode === "settlement" ? "settlement day" : "match date"})`}
           option={charts.cal}
           height={260}
           accent="cyan"
