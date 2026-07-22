@@ -169,6 +169,7 @@ pub fn load_snapshot(root: &Path) -> AppResult<TrackerSnapshot> {
         control_signals: parse_jsonl(&paths::control_signals_jsonl(root)),
         settlement_reviews: parse_jsonl(&paths::settlement_reviews_jsonl(root)),
         coverage_health: read_json_value(&paths::coverage_health_json(root)),
+        deep_queue: read_json_value(&paths::deep_queue_json(root)),
     })
 }
 
@@ -210,6 +211,7 @@ pub fn data_fingerprint(root: &Path) -> String {
         paths::odds_structured_json(root),
         paths::odds_latest_json(root),
         paths::coverage_health_json(root),
+        paths::deep_queue_json(root),
         paths::control_signals_jsonl(root),
         paths::settlement_reviews_jsonl(root),
     ] {

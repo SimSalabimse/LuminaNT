@@ -91,4 +91,7 @@ pub struct TrackerSnapshot {
     /// Research Coverage Health (`data/state/coverage_health.json`)
     #[serde(default)]
     pub coverage_health: Value,
+    /// Deep queue composition SSOT (`data/state/deep_queue.json`, D17)
+    #[serde(default)]
+    pub deep_queue: Value,
 }

@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-07-22T15:42:36Z",
+  "source": "demo",
+  "day": "2026-07-22",
+  "preferred_share": 0.667,
+  "short_main_share": 0.167,
+  "deep_queue_composition": {
+    "n": 6,
+    "preferred_n": 4,
+    "short_main_n": 1,
+    "preferred_share": 0.667,
+    "short_main_share": 0.167,
+    "meets_preferred_floor": true,
+    "meets_short_main_cap": true
+  },
+  "deep_queue": [
+    {
+      "match": "Demo FC vs Sample United",
+      "selection": "Totalt antall mål - over/under 2.5: Over 2.5",
+      "decimal_odds": 2.05,
+      "preferred": true,
+      "short_main": false,
+      "sport": "football"
+    },
+    {
+      "match": "Alpha vs Beta",
+      "selection": "Vinner: Beta",
+      "decimal_odds": 2.2,
+      "preferred": true,
+      "short_main": false,
+      "sport": "football"
+    },
+    {
+      "match": "Gamma vs Delta",
+      "selection": "Begge lag scorer: Ja",
+      "decimal_odds": 1.95,
+      "preferred": true,
+      "short_main": false,
+      "sport": "football"
+    },
+    {
+      "match": "Epsilon vs Zeta",
+      "selection": "Vinner: Epsilon",
+      "decimal_odds": 1.55,
+      "preferred": false,
+      "short_main": true,
+      "sport": "football"
+    },
+    {
+      "match": "Eta vs Theta",
+      "selection": "Totalt antall mål - over/under 3.5: Under 3.5",
+      "decimal_odds": 1.9,
+      "preferred": true,
+      "short_main": false,
+      "sport": "football"
+    },
+    {
+      "match": "Iota vs Kappa",
+      "selection": "Asian handicap: Kappa +0.5",
+      "decimal_odds": 1.88,
+      "preferred": false,
+      "short_main": false,
+      "sport": "football"
+    }
+  ]
+}

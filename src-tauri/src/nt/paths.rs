@@ -60,6 +60,13 @@ pub fn coverage_health_json(root: &Path) -> PathBuf {
         .join("coverage_health.json")
 }
 
+/// Deep queue composition SSOT (`data/state/deep_queue.json`, D17).
+pub fn deep_queue_json(root: &Path) -> PathBuf {
+    root.join("data")
+        .join("state")
+        .join("deep_queue.json")
+}
+
 pub fn edges_summary_md(root: &Path) -> PathBuf {
     root.join("data").join("state").join("edges_summary.md")
 }

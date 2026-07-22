@@ -235,6 +235,53 @@ export interface CoverageHealth {
   [key: string]: unknown;
 }
 
+/**
+ * Deep queue composition object (`deep_queue_composition` in deep_queue.json).
+ * Shares are 0–1 floats from the engine — never invent on the client.
+ */
+export interface DeepQueueComposition {
+  n?: number;
+  preferred_n?: number;
+  short_main_n?: number;
+  preferred_share?: number;
+  short_main_share?: number;
+  meets_preferred_floor?: boolean;
+  meets_short_main_cap?: boolean;
+  [key: string]: unknown;
+}
+
+/** One deep-queue line from `data/state/deep_queue.json`. */
+export interface DeepQueueLine {
+  match?: string;
+  selection?: string;
+  decimal_odds?: number;
+  preferred?: boolean;
+  short_main?: boolean;
+  sport?: string;
+  reason?: string;
+  prior_ev?: number;
+  market_family?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Deep queue SSOT (`data/state/deep_queue.json`, D17).
+ * Preferred ≥55% / short-main ≤25% bars read preferred_share / short_main_share only.
+ */
+export interface DeepQueueState {
+  schema_version?: number;
+  updated_at?: string;
+  source?: string;
+  odds_path?: string;
+  day?: string;
+  /** Convenience mirrors of composition shares (0–1). */
+  preferred_share?: number;
+  short_main_share?: number;
+  deep_queue_composition?: DeepQueueComposition;
+  deep_queue?: DeepQueueLine[];
+  [key: string]: unknown;
+}
+
 export interface GitStatus {
   is_repo: boolean;
   branch: string;
@@ -402,6 +449,11 @@ export interface TrackerSnapshot {
    * Loaded by Tauri snapshot path; missing file → empty object (fail-closed UX).
    */
   coverage_health?: CoverageHealth | Record<string, unknown> | null;
+  /**
+   * Deep queue composition SSOT (`data/state/deep_queue.json`, D17).
+   * Missing file → empty object from loader; panels must null-safe (no invented %).
+   */
+  deep_queue?: DeepQueueState | Record<string, unknown> | null;
 }
 
 export interface LearningBucket {
