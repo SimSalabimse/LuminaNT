@@ -1,5 +1,6 @@
 /**
  * Premium shortlist decision board — ranked, dense, no empty voids.
+ * PR7: single-card place-ack / abandon on Pending (+ abandon on ConfirmedPlaced).
  */
 import { useMemo, useState } from "react";
 import {
@@ -14,13 +15,22 @@ import {
   ChevronUp,
   Sparkles,
   Shield,
+  ClipboardCheck,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDataStore } from "@/stores/data-store";
 import { useAppStore } from "@/stores/app-store";
 import { buildShortlistCards, type ShortlistCard } from "@/lib/capital";
-import { formatNokPlain, cn } from "@/lib/utils";
+import {
+  formatNokPlain,
+  cn,
+  isOpenRisk,
+  isConfirmedPlaced,
+  normalizeResultKey,
+} from "@/lib/utils";
 import { deriveGateChips } from "@/lib/gateChips";
 import { activeControlSignals } from "@/lib/phaseRadar";
 import {
@@ -32,6 +42,24 @@ import {
   classifyEmptySlip,
   emptySlipInputFromCoverage,
 } from "@/lib/emptySlip";
+
+/** Ledger Pending (intent) — place-ack target. Not ConfirmedPlaced. */
+function isLedgerPending(result: string | null | undefined): boolean {
+  return normalizeResultKey(result || "") === "pending";
+}
+
+/** Single-card CTAs: place-ack (Pending only) · abandon (open risk). */
+function cardActions(c: ShortlistCard): {
+  canPlaceAck: boolean;
+  canAbandon: boolean;
+} {
+  if (!c.betId) return { canPlaceAck: false, canAbandon: false };
+  const open = isOpenRisk(c.result || "");
+  return {
+    canPlaceAck: isLedgerPending(c.result),
+    canAbandon: open,
+  };
+}
 
 function StatusIcon({ status }: { status: ShortlistCard["status"] }) {
   if (status === "win") return <CheckCircle2 className="h-5 w-5 text-profit" />;
@@ -51,9 +79,17 @@ function statusShell(status: ShortlistCard["status"]) {
   return "border-white/[0.08] bg-card";
 }
 
-function statusLabel(status: ShortlistCard["status"]) {
+/** Map open-risk ledger result to operator label (Pending vs Confirmed). */
+function statusLabel(
+  status: ShortlistCard["status"],
+  result?: string | null
+) {
   if (status === "planned") return "To place";
-  if (status === "open") return "Open";
+  if (status === "open") {
+    if (isConfirmedPlaced(result || "")) return "Confirmed";
+    if (isLedgerPending(result)) return "Pending";
+    return "Open";
+  }
   if (status === "win") return "Win";
   if (status === "loss") return "Loss";
   if (status === "abandoned") return "Abandoned";
@@ -100,9 +136,16 @@ function stakeRationale(c: ShortlistCard): { short: string; detail: string } {
 export function ShortlistBoard() {
   const snapshot = useDataStore((s) => s.snapshot);
   const bets = useDataStore((s) => s.bets);
-  const setView = useAppStore((s) => s.setView);
+  const runNt = useDataStore((s) => s.runNt);
+  const refreshing = useDataStore((s) => s.refreshing);
   const drillForensic = useDataStore((s) => s.drillForensic);
+  const setView = useAppStore((s) => s.setView);
+  const demo = useAppStore((s) => s.settings.demoMode);
+  const setToast = useAppStore((s) => s.setToast);
+  const setError = useAppStore((s) => s.setError);
   const [expanded, setExpanded] = useState<string | null>(null);
+  /** Bet id currently running place-ack / abandon (single-card busy state). */
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const status = useMemo(
     () => deriveRiskStatus(snapshot?.risk, snapshot?.bankroll, snapshot?.phase),
@@ -156,6 +199,68 @@ export function ShortlistBoard() {
       });
     } else {
       setView("bets");
+    }
+  };
+
+  /** PR7 D16: place-ack single card — Pending → ConfirmedPlaced. */
+  const onPlaceAck = async (c: ShortlistCard) => {
+    const betId = c.betId;
+    if (!betId || !isLedgerPending(c.result)) {
+      setError("place-ack only applies to ledger Pending tickets");
+      return;
+    }
+    if (demo) {
+      setError(
+        "CLI commands require a live tracker folder in the desktop app."
+      );
+      return;
+    }
+    const ok = window.confirm(
+      `Place-ack ${betId}?\n\n` +
+        `${c.match} · ${c.selection}\n` +
+        `Pending → ConfirmedPlaced (placed on NT).`
+    );
+    if (!ok) {
+      setToast("Place-ack cancelled");
+      return;
+    }
+    setBusyId(betId);
+    try {
+      await runNt(["place-ack", "--ids", betId]);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  /** PR7 D16: abandon open-risk card — reason required (default not_placed). */
+  const onAbandon = async (c: ShortlistCard) => {
+    const betId = c.betId;
+    if (!betId || !isOpenRisk(c.result || "")) {
+      setError("abandon only applies to Pending or ConfirmedPlaced tickets");
+      return;
+    }
+    if (demo) {
+      setError(
+        "CLI commands require a live tracker folder in the desktop app."
+      );
+      return;
+    }
+    const reason = "not_placed";
+    const ok = window.confirm(
+      `Abandon ${betId}?\n` +
+        `${c.match} · ${c.selection}\n` +
+        `Reason: ${reason}\n\n` +
+        `Frees open risk · P/L 0.`
+    );
+    if (!ok) {
+      setToast("Abandon cancelled");
+      return;
+    }
+    setBusyId(betId);
+    try {
+      await runNt(["abandon", "--ids", betId, "--reason", reason]);
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -302,6 +407,9 @@ export function ShortlistBoard() {
           {cards.map((c, idx) => {
             const rationale = stakeRationale(c);
             const isOpen = expanded === c.id;
+            const actions = cardActions(c);
+            const cardBusy = Boolean(c.betId && busyId === c.betId);
+            const cliDisabled = demo || refreshing || cardBusy;
             const riskShare =
               status.liquid > 0 && c.stake
                 ? (c.stake / status.liquid) * 100
@@ -349,7 +457,7 @@ export function ShortlistBoard() {
                         c.status === "loss" && "text-loss"
                       )}
                     >
-                      {statusLabel(c.status)}
+                      {statusLabel(c.status, c.result)}
                     </span>
                   </div>
                 </div>
@@ -455,6 +563,60 @@ export function ShortlistBoard() {
                       </p>
                     )}
                   </div>
+
+                  {(actions.canPlaceAck || actions.canAbandon) && (
+                    <div className="mt-3 flex flex-col gap-2">
+                      {actions.canPlaceAck && (
+                        <Button
+                          type="button"
+                          size="default"
+                          variant="default"
+                          disabled={cliDisabled}
+                          title={
+                            demo
+                              ? "Disabled in demo mode — use live tracker"
+                              : "Pending → ConfirmedPlaced after placing on NT"
+                          }
+                          onClick={() => onPlaceAck(c)}
+                          className="w-full min-h-[44px]"
+                        >
+                          {cardBusy ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <ClipboardCheck className="h-3.5 w-3.5" />
+                          )}
+                          Place-ack
+                        </Button>
+                      )}
+                      {actions.canAbandon && (
+                        <Button
+                          type="button"
+                          size="default"
+                          variant="outline"
+                          disabled={cliDisabled}
+                          title={
+                            demo
+                              ? "Disabled in demo mode — use live tracker"
+                              : "Abandon open risk · reason not_placed"
+                          }
+                          onClick={() => onAbandon(c)}
+                          className="w-full min-h-[44px] border-loss/30 text-loss hover:bg-loss/10 hover:border-loss/45"
+                        >
+                          {cardBusy ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                          Abandon
+                        </Button>
+                      )}
+                      {demo && (
+                        <p className="text-[11px] text-muted-foreground text-center">
+                          Demo mode — CLI disabled
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   <button
                     type="button"
