@@ -195,6 +195,11 @@ export function fluidPlChartOption(points: EquityPoint[]): EChartsOption {
 }
 
 /** Horizontal stacked-style open risk by sport (single series bar for density). */
+/**
+ * Open-risk by sport — horizontal bars.
+ * Tuned for sparse desks (1–3 sports): readable labels, NOK units, room for
+ * value labels, no full-bleed single-cell stretch in wide/fullscreen layouts.
+ */
 export function openRiskBySportOption(
   rows: { sport: string; stake: number; n: number }[]
 ): EChartsOption {
@@ -208,10 +213,22 @@ export function openRiskBySportOption(
       },
     };
   }
+  // Largest stake on top for scan order
   const data = [...rows].sort((a, b) => a.stake - b.stake);
+  const maxStake = Math.max(...data.map((r) => r.stake), 1);
+  // Headroom so right-side labels never clip (especially fullscreen wide panes)
+  const xMax = maxStake * 1.28;
+
   return {
     backgroundColor: "transparent",
-    grid: { left: 88, right: 48, top: 12, bottom: 12 },
+    animationDuration: 280,
+    grid: {
+      left: 8,
+      right: 12,
+      top: 8,
+      bottom: 8,
+      containLabel: true,
+    },
     tooltip: {
       trigger: "axis",
       ...tooltipBase,
@@ -222,18 +239,35 @@ export function openRiskBySportOption(
         const i = p?.dataIndex ?? 0;
         const r = data[i];
         if (!r) return "";
-        return `<b>${r.sport}</b><br/>Open stake: ${fmt2(r.stake)} NOK · ${r.n} ticket(s)`;
+        return `<b>${r.sport}</b><br/>Open stake: <b>${fmt2(r.stake)} NOK</b><br/>${r.n} ticket(s)`;
       },
     },
     xAxis: {
       type: "value",
-      axisLabel: { ...axisLabel, formatter: (v: number) => fmt2(v) },
+      min: 0,
+      max: xMax,
+      axisLabel: {
+        ...axisLabel,
+        fontSize: 11,
+        formatter: (v: number) => `${fmt2(v)}`,
+      },
       splitLine,
+      name: "NOK",
+      nameTextStyle: { color: chartText.muted, fontSize: 11, padding: [0, 0, 0, 4] },
+      nameLocation: "end",
     },
     yAxis: {
       type: "category",
       data: data.map((r) => r.sport),
-      axisLabel: { ...axisLabel, width: 80, overflow: "truncate" },
+      axisLabel: {
+        ...axisLabel,
+        fontSize: 13,
+        fontWeight: 600,
+        color: chartText.strong,
+        // Full sport name — wider than old 80px truncate
+        width: 120,
+        overflow: "truncate",
+      },
       axisTick: { show: false },
       axisLine: { show: false },
     },
@@ -242,18 +276,27 @@ export function openRiskBySportOption(
         type: "bar",
         data: data.map((r) => ({
           value: +r.stake.toFixed(2),
-          itemStyle: { color: colorForSport(r.sport) },
+          itemStyle: {
+            color: colorForSport(r.sport),
+            borderRadius: [0, 6, 6, 0],
+          },
         })),
-        barMaxWidth: 18,
+        // Cap bar thickness so 1 sport never becomes a fullscreen slab
+        barMaxWidth: 32,
+        barMinHeight: 4,
         label: {
           show: true,
           position: "right" as const,
-          color: chartText.muted,
-          fontSize: 11,
+          color: chartText.strong,
+          fontSize: 12,
+          fontWeight: 600,
           formatter: (p: unknown) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const v = (p as any)?.value;
-            return fmt2(Number(v ?? 0));
+            const v = Number((p as any)?.value ?? 0);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const i = Number((p as any)?.dataIndex ?? 0);
+            const n = data[i]?.n ?? 0;
+            return `${fmt2(v)} NOK · ${n}t`;
           },
         },
       },
@@ -261,7 +304,23 @@ export function openRiskBySportOption(
   };
 }
 
-/** P2: sport × status open-risk heatmap */
+/** Short status labels for heatmap axis (ConfirmedPlaced → Confirmed). */
+function shortOpenStatus(status: string): string {
+  const r = String(status || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
+  if (r === "confirmedplaced") return "Confirmed";
+  if (r === "pending") return "Pending";
+  return status || "—";
+}
+
+/**
+ * Sport × status open-risk heatmap.
+ * Sparse matrices (1 sport × 1 status) used to fill the whole pane as one
+ * unreadable gold slab — cell labels now use high-contrast type, status axis
+ * uses short names, and visualMap sits right (not under the chart).
+ */
 export function riskHeatmapOption(
   matrix: {
     sports: string[];
@@ -279,58 +338,123 @@ export function riskHeatmapOption(
       },
     };
   }
+  const statusLabels = matrix.statuses.map(shortOpenStatus);
   const data = matrix.cells.map((c) => [
     matrix.statuses.indexOf(c.status),
     matrix.sports.indexOf(c.sport),
     +c.stake.toFixed(2),
+    c.n,
   ]);
   const maxS = Math.max(...matrix.cells.map((c) => c.stake), 1);
+  const sparse = matrix.sports.length <= 2 && matrix.statuses.length <= 2;
+
   return {
     backgroundColor: "transparent",
+    animationDuration: 280,
     tooltip: {
       ...tooltipBase,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       formatter: (p: any) => {
         const d = p?.data as number[] | undefined;
         if (!d) return "";
-        const status = matrix.statuses[d[0]] || "";
+        const status = shortOpenStatus(matrix.statuses[d[0]] || "");
         const sport = matrix.sports[d[1]] || "";
-        return `<b>${sport}</b> · ${status}<br/>${fmt2(d[2])} NOK`;
+        const n = d[3];
+        const nPart =
+          typeof n === "number" && Number.isFinite(n)
+            ? ` · ${n} ticket(s)`
+            : "";
+        return `<b>${sport}</b> · ${status}<br/><b>${fmt2(d[2])} NOK</b>${nPart}`;
       },
     },
-    grid: { left: 90, right: 24, top: 16, bottom: 40 },
+    // Right-side intensity scale frees bottom axis labels; containLabel keeps
+    // sport names fully visible on wide/fullscreen panes.
+    grid: {
+      left: 8,
+      right: sparse ? 72 : 88,
+      top: 12,
+      bottom: 8,
+      containLabel: true,
+    },
     xAxis: {
       type: "category",
-      data: matrix.statuses,
-      axisLabel: { ...axisLabel, fontSize: 10 },
-      splitArea: { show: true },
+      data: statusLabels,
+      axisLabel: {
+        ...axisLabel,
+        fontSize: 12,
+        fontWeight: 600,
+        color: chartText.strong,
+        interval: 0,
+        hideOverlap: false,
+      },
+      axisTick: { show: false },
+      splitArea: { show: false },
     },
     yAxis: {
       type: "category",
       data: matrix.sports,
-      axisLabel: { ...axisLabel, width: 80, overflow: "truncate" },
-      splitArea: { show: true },
+      axisLabel: {
+        ...axisLabel,
+        fontSize: 13,
+        fontWeight: 600,
+        color: chartText.strong,
+        width: 110,
+        overflow: "truncate",
+      },
+      axisTick: { show: false },
+      splitArea: { show: false },
     },
     visualMap: {
       min: 0,
       max: maxS,
       calculable: false,
-      orient: "horizontal",
-      left: "center",
-      bottom: 0,
-      inRange: { color: ["#1a2332", "#C9A227"] },
-      textStyle: { color: chartText.muted, fontSize: 10 },
+      orient: "vertical",
+      right: 4,
+      top: "middle",
+      itemWidth: 10,
+      itemHeight: sparse ? 64 : 96,
+      text: ["High", "Low"],
+      textGap: 6,
+      inRange: {
+        // Darker floor so empty-ish cells stay readable; gold peak for max stake
+        color: ["#243044", "#6B5A1E", "#C9A227", "#F0D060"],
+      },
+      textStyle: { color: chartText.strong, fontSize: 11, fontWeight: 500 },
     },
     series: [
       {
         type: "heatmap",
         data,
-        label: { show: true, color: chartText.muted, fontSize: 10, formatter: (p: unknown) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const v = (p as any)?.data?.[2];
-          return v ? fmt2(Number(v)) : "";
-        }},
-        emphasis: { itemStyle: { shadowBlur: 6, shadowColor: "rgba(0,0,0,0.4)" } },
+        // Keep cells from looking like one giant fill when only 1×1
+        itemStyle: {
+          borderColor: "rgba(8,14,26,0.85)",
+          borderWidth: 2,
+          borderRadius: 4,
+        },
+        label: {
+          show: true,
+          fontSize: sparse ? 13 : 11,
+          fontWeight: 700,
+          // Dark on gold peak; light on dark floor — pick mid via formatter style
+          color: "#0B1220",
+          formatter: (p: unknown) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const d = (p as any)?.data as number[] | undefined;
+            const v = d?.[2];
+            if (v == null || !Number(v)) return "";
+            const n = d?.[3];
+            const stake = fmt2(Number(v));
+            return n != null ? `${stake}\nNOK` : `${stake} NOK`;
+          },
+        },
+        emphasis: {
+          itemStyle: {
+            shadowBlur: 8,
+            shadowColor: "rgba(0,0,0,0.45)",
+            borderColor: "#F0D060",
+            borderWidth: 2,
+          },
+        },
       },
     ],
   };
