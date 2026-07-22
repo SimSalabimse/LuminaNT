@@ -54,6 +54,12 @@ pub fn control_signals_jsonl(root: &Path) -> PathBuf {
         .join("control_signals.jsonl")
 }
 
+pub fn coverage_health_json(root: &Path) -> PathBuf {
+    root.join("data")
+        .join("state")
+        .join("coverage_health.json")
+}
+
 pub fn edges_summary_md(root: &Path) -> PathBuf {
     root.join("data").join("state").join("edges_summary.md")
 }

@@ -208,6 +208,9 @@ pub fn data_fingerprint(root: &Path) -> String {
         paths::stake_decisions_jsonl(root),
         paths::odds_structured_json(root),
         paths::odds_latest_json(root),
+        paths::coverage_health_json(root),
+        paths::control_signals_jsonl(root),
+        paths::settlement_reviews_jsonl(root),
     ] {
         if let Ok(meta) = fs::metadata(&p) {
             let modified = meta
