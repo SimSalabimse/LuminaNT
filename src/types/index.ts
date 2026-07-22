@@ -660,4 +660,14 @@ export interface AppSettings {
   aiApiKey: string;
   aiModel: string;
   demoMode: boolean;
+  /**
+   * D18 — Opt-in OS toast when coverage_health.level transitions to critical.
+   * Default off. Demo mode never fires.
+   */
+  notifyCoverageCritical?: boolean;
+  /**
+   * D18 — Opt-in OS toast when risk schema becomes stale (pre-package export).
+   * Default off. Demo mode never fires.
+   */
+  notifyStaleRisk?: boolean;
 }

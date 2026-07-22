@@ -20,6 +20,7 @@ import { useAppStore } from "@/stores/app-store";
 import { useDataStore } from "@/stores/data-store";
 import { isTauri } from "@/lib/tauri";
 import { attachGlobalKeyboard } from "@/lib/keyboard";
+import { useOsNotifications } from "@/hooks/use-os-notifications";
 import { cn } from "@/lib/utils";
 import { X, Loader2 } from "lucide-react";
 
@@ -102,6 +103,9 @@ export default function App() {
   const settings = useAppStore((s) => s.settings);
   const view = useAppStore((s) => s.view);
   const loading = useDataStore((s) => s.loading);
+
+  // D18 — opt-in OS toasts for COV CRITICAL / stale risk (demo no-op)
+  useOsNotifications();
 
   useEffect(() => {
     if (!isTauri()) return;

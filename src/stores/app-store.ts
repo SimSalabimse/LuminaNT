@@ -22,6 +22,9 @@ const defaultSettings: AppSettings = {
   aiApiKey: "",
   aiModel: defaultModelForProvider("xai"),
   demoMode: false,
+  /** D18 — opt-in; off by default */
+  notifyCoverageCritical: false,
+  notifyStaleRisk: false,
 };
 
 /** D20: keep provider/model pair on the closed allowlist. */

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FolderOpen, Save, Info } from "lucide-react";
+import { FolderOpen, Save, Info, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,7 @@ import {
   resolveAllowedModel,
 } from "@/lib/aiModels";
 import { isTauri, pickFolder, setPythonCmd } from "@/lib/tauri";
+import { ensureNotificationPermission } from "@/lib/osNotify";
 import type { AiProvider } from "@/types";
 
 export function Settings() {
@@ -193,6 +194,53 @@ export function Settings() {
         </div>
       </section>
 
+
+      <section className="glass rounded-xl p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2">
+          <Bell className="h-4 w-4 text-primary" />
+          OS notifications
+        </h2>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Opt-in short system toasts when the desk may be backgrounded. No bet
+          details — only coverage critical / stale risk schema. Off by default;
+          silent in demo mode. Uses the browser Notification API (WebView2 /
+          desktop webview); grant permission when enabling.
+        </p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <Label>Notify when coverage critical</Label>
+            <p className="text-xs text-muted-foreground">
+              Once per transition to COV CRITICAL (debounced)
+            </p>
+          </div>
+          <Switch
+            checked={local.notifyCoverageCritical === true}
+            onCheckedChange={async (notifyCoverageCritical) => {
+              setLocal((s) => ({ ...s, notifyCoverageCritical }));
+              if (notifyCoverageCritical) {
+                await ensureNotificationPermission();
+              }
+            }}
+          />
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <Label>Notify on stale risk</Label>
+            <p className="text-xs text-muted-foreground">
+              Once when risk.json looks pre-package / stale schema
+            </p>
+          </div>
+          <Switch
+            checked={local.notifyStaleRisk === true}
+            onCheckedChange={async (notifyStaleRisk) => {
+              setLocal((s) => ({ ...s, notifyStaleRisk }));
+              if (notifyStaleRisk) {
+                await ensureNotificationPermission();
+              }
+            }}
+          />
+        </div>
+      </section>
       <section className="glass rounded-xl p-5 space-y-4">
         <h2 className="text-sm font-semibold">AI Agent</h2>
         <div className="space-y-2">
