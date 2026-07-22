@@ -1,17 +1,21 @@
 import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
+  AlertTriangle,
   CheckCircle2,
   ChevronDown,
+  ClipboardCheck,
   FileInput,
   FileOutput,
   Flag,
+  Layers,
   Loader2,
   Play,
   Radar,
   Rocket,
   Target,
   Terminal,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,29 +29,68 @@ import { parsePhasesFromConfig, progressToNextPhase } from "@/lib/plan";
 import { parsePlaceTheseMd } from "@/lib/capital";
 import { cn, formatNokPlain, formatPct } from "@/lib/utils";
 import { SettleDesk } from "@/components/ops/SettleDesk";
+import {
+  evaluateBoardFreshness,
+  oddsMtimeFromInbox,
+  stampBoardSticky,
+  type BoardSticky,
+} from "@/lib/boardFreshness";
 
+/** Board-first desk order (PR5). Aux commands stay available below. */
 const COMMANDS: {
   id: string;
   label: string;
   hint: string;
   primary?: boolean;
+  group: "board" | "aux";
 }[] = [
-  { id: "status", label: "Status", hint: "Equity · phase · cap" },
-  { id: "validate", label: "Validate", hint: "Ledger integrity" },
-  { id: "refresh", label: "Refresh", hint: "Recompute state" },
-  { id: "learn", label: "Learn", hint: "Sport/market mults" },
+  {
+    id: "board",
+    label: "Board",
+    hint: "research board · shortlist + coverage",
+    primary: true,
+    group: "board",
+  },
+  {
+    id: "ready",
+    label: "Ready",
+    hint: "research ready · gate before recommend",
+    group: "board",
+  },
   {
     id: "recommend",
     label: "Recommend",
-    hint: "Build place slip",
+    hint: "Build place slip (dry-run default)",
     primary: true,
+    group: "board",
   },
-  { id: "settle", label: "Settle", hint: "Apply results file" },
+  {
+    id: "place-ack",
+    label: "Place-ack",
+    hint: "Pending → ConfirmedPlaced",
+    group: "board",
+  },
+  {
+    id: "abandon",
+    label: "Abandon",
+    hint: "Free open risk · P/L 0",
+    group: "board",
+  },
+  { id: "status", label: "Status", hint: "Equity · phase · cap", group: "aux" },
+  {
+    id: "validate",
+    label: "Validate",
+    hint: "Ledger integrity",
+    group: "aux",
+  },
+  { id: "refresh", label: "Refresh", hint: "Recompute state", group: "aux" },
+  { id: "learn", label: "Learn", hint: "Sport/market mults", group: "aux" },
+  { id: "settle", label: "Settle", hint: "Apply results file", group: "aux" },
 ];
 
 /**
- * Ops workspace — Workflow essentials + phase management dock.
- * Forensic Desk Triad PR5.
+ * Ops workspace — board-first CLI + phase management dock.
+ * PR5: research board → ready → recommend → place-ack / abandon (D14 freshness).
  */
 export function Ops() {
   const snapshot = useDataStore((s) => s.snapshot);
@@ -62,9 +105,19 @@ export function Ops() {
   const setView = useAppStore((s) => s.setView);
   const filterScope = useAppStore((s) => s.filterScope);
 
-  const [oddsPath, setOddsPath] = useState("inbox/odds_template.csv");
+  const [oddsPath, setOddsPath] = useState("inbox/current_odds_01.txt");
   const [resultsPath, setResultsPath] = useState("inbox/results_template.yaml");
+  /** Dry-run default — live recommend only after operator unchecks. */
   const [dryRun, setDryRun] = useState(true);
+  /** Soft-gate override — requires confirm at run time. */
+  const [allowLowCoverage, setAllowLowCoverage] = useState(false);
+  const [writeScaffolds, setWriteScaffolds] = useState(false);
+  const [betIds, setBetIds] = useState("");
+  const [abandonReason, setAbandonReason] = useState("not_placed");
+  /** D14 sticky: set only after successful research board. */
+  const [boardSticky, setBoardSticky] = useState<BoardSticky | null>(null);
+  /** One-shot override when board is stale (live recommend only). */
+  const [forceStaleBoard, setForceStaleBoard] = useState(false);
   const [lastOutput, setLastOutput] = useState("");
   const [inboxName, setInboxName] = useState("");
   const [inboxContent, setInboxContent] = useState("");
@@ -94,22 +147,117 @@ export function Ops() {
   const outbox = snapshot?.outbox || [];
   const placeThese = snapshot?.place_these || "";
 
+  const currentOddsMtimeMs = useMemo(
+    () => oddsMtimeFromInbox(oddsPath, inbox),
+    [oddsPath, inbox]
+  );
+
+  const boardFreshness = useMemo(
+    () =>
+      evaluateBoardFreshness({
+        sticky: boardSticky,
+        oddsPath,
+        currentOddsMtimeMs,
+      }),
+    [boardSticky, oddsPath, currentOddsMtimeMs]
+  );
+
   const run = async (id: string) => {
     let args: string[] = [];
+
     if (id === "status") args = ["status"];
     else if (id === "validate") args = ["validate"];
     else if (id === "refresh") args = ["refresh"];
     else if (id === "learn") args = ["learn"];
-    else if (id === "recommend") {
+    else if (id === "board") {
+      args = ["research", "board", "--odds", oddsPath];
+      if (writeScaffolds) args.push("--write-scaffolds");
+    } else if (id === "ready") {
+      args = ["research", "ready", "--odds", oddsPath];
+    } else if (id === "recommend") {
+      // D14: live recommend requires fresh board sticky (or explicit force).
+      if (!dryRun && !boardFreshness.fresh && !forceStaleBoard) {
+        setError(
+          `Board not fresh (${boardFreshness.label}): ${boardFreshness.reason} ` +
+            `Run Board first, or enable “Force recommend without fresh board”.`
+        );
+        return;
+      }
+      if (allowLowCoverage) {
+        const ok = window.confirm(
+          "Override Coverage Health critical soft gate?\n\n" +
+            "Only use after deep packs on the survivable band. " +
+            "This does not soften EV/haircut/capital rails."
+        );
+        if (!ok) {
+          setToast("Recommend cancelled — allow-low-coverage not confirmed");
+          return;
+        }
+      }
+      if (!dryRun) {
+        const okLive = window.confirm(
+          "Live recommend will append Pending rows to the ledger.\n\n" +
+            "Confirm odds path and board freshness, then place on NT and place-ack."
+        );
+        if (!okLive) {
+          setToast("Live recommend cancelled");
+          return;
+        }
+      }
       args = ["recommend", "--odds", oddsPath];
       if (dryRun) args.push("--dry-run");
+      if (allowLowCoverage) args.push("--allow-low-coverage");
+    } else if (id === "place-ack") {
+      const ids = betIds.trim();
+      if (!ids) {
+        setError("place-ack requires --ids (comma-separated bet_id list)");
+        return;
+      }
+      args = ["place-ack", "--ids", ids];
+    } else if (id === "abandon") {
+      const ids = betIds.trim();
+      if (!ids) {
+        setError("abandon requires --ids (comma-separated bet_id list)");
+        return;
+      }
+      const reason = abandonReason.trim() || "not_placed";
+      const ok = window.confirm(
+        `Abandon bet(s) ${ids}?\nReason: ${reason}\n\nFrees open risk · P/L 0.`
+      );
+      if (!ok) {
+        setToast("Abandon cancelled");
+        return;
+      }
+      args = ["abandon", "--ids", ids, "--reason", reason];
     } else if (id === "settle") {
       args = ["settle", "--results", resultsPath];
+    } else {
+      setError(`Unknown command: ${id}`);
+      return;
     }
+
     const res = await runNt(args);
     setLastOutput(
       [`$ ${res.command}`, res.stdout, res.stderr].filter(Boolean).join("\n\n")
     );
+
+    // D14: stamp sticky only after successful board for this odds path.
+    if (id === "board" && res.ok) {
+      const mtime =
+        oddsMtimeFromInbox(oddsPath, useDataStore.getState().snapshot?.inbox) ??
+        currentOddsMtimeMs;
+      setBoardSticky(
+        stampBoardSticky({
+          oddsPath,
+          oddsMtimeMs: mtime,
+        })
+      );
+      setForceStaleBoard(false);
+      setToast("Board sticky stamped (D14 fresh)");
+    }
+    if (id === "recommend" && res.ok && !dryRun) {
+      setForceStaleBoard(false);
+    }
   };
 
   const saveInbox = async () => {
@@ -143,7 +291,7 @@ export function Ops() {
             Ops · CLI
           </h1>
           <p className="page-subtitle">
-            Commands · place slips · settle · phase ladder
+            Board-first · ready · recommend · place-ack · settle
             {filterScope === "filtered" && (
               <span className="text-primary"> · filtered scope active</span>
             )}
@@ -181,12 +329,54 @@ export function Ops() {
         </p>
       )}
 
+      {/* Shared odds path + D14 freshness strip */}
+      <div className="glass rounded-xl p-3 holo-border flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <Label className="text-[10px] uppercase text-muted-foreground">
+            Odds file (board · ready · recommend)
+          </Label>
+          <Input
+            className="h-8 font-mono text-[11px]"
+            value={oddsPath}
+            onChange={(e) => {
+              setOddsPath(e.target.value);
+              setForceStaleBoard(false);
+            }}
+            list="ops-inbox-files"
+          />
+        </div>
+        <div
+          className={cn(
+            "rounded-lg border px-3 py-2 text-[11px] sm:max-w-sm shrink-0",
+            boardFreshness.fresh
+              ? "border-profit/30 bg-profit/10 text-profit"
+              : "border-pending/35 bg-pending/10 text-pending"
+          )}
+        >
+          <div className="font-semibold flex items-center gap-1.5">
+            {boardFreshness.fresh ? (
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            ) : (
+              <AlertTriangle className="h-3.5 w-3.5" />
+            )}
+            Board {boardFreshness.label}
+          </div>
+          <p className="text-muted-foreground mt-0.5 leading-snug">
+            {boardFreshness.reason}
+          </p>
+        </div>
+      </div>
+
       <div className="grid lg:grid-cols-12 gap-4 min-h-0">
         {/* ── Left: Workflow essentials ── */}
         <div className="lg:col-span-7 flex flex-col gap-3 min-w-0">
-          {/* Command grid */}
+          <div className="section-label flex items-center gap-1.5">
+            <Layers className="h-3.5 w-3.5 text-primary" />
+            Board-first desk
+          </div>
+          {/* Command grid — board path first */}
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
-            {COMMANDS.map((c) => (
+            {COMMANDS.filter((c) => c.group === "board").map((c) => (
               <div
                 key={c.id}
                 className={cn(
@@ -209,27 +399,122 @@ export function Ops() {
                   </div>
                 </div>
 
+                {c.id === "board" && (
+                  <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={writeScaffolds}
+                      onChange={(e) => setWriteScaffolds(e.target.checked)}
+                    />
+                    --write-scaffolds
+                  </label>
+                )}
+
                 {c.id === "recommend" && (
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] uppercase text-muted-foreground">
-                      Odds file
-                    </Label>
-                    <Input
-                      className="h-7 font-mono text-[11px]"
-                      value={oddsPath}
-                      onChange={(e) => setOddsPath(e.target.value)}
-                      list="ops-inbox-files"
-                    />
                     <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
                       <input
                         type="checkbox"
                         checked={dryRun}
                         onChange={(e) => setDryRun(e.target.checked)}
                       />
-                      --dry-run
+                      --dry-run (default)
                     </label>
+                    <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={allowLowCoverage}
+                        onChange={(e) => setAllowLowCoverage(e.target.checked)}
+                      />
+                      --allow-low-coverage
+                      <span className="text-pending">(confirm)</span>
+                    </label>
+                    {!boardFreshness.fresh && (
+                      <label className="flex items-start gap-2 text-[11px] text-pending">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={forceStaleBoard}
+                          onChange={(e) =>
+                            setForceStaleBoard(e.target.checked)
+                          }
+                        />
+                        Force live recommend without fresh board (D14 override)
+                      </label>
+                    )}
                   </div>
                 )}
+
+                {(c.id === "place-ack" || c.id === "abandon") && (
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] uppercase text-muted-foreground">
+                      Bet IDs
+                    </Label>
+                    <Input
+                      className="h-7 font-mono text-[11px]"
+                      placeholder="id1,id2"
+                      value={betIds}
+                      onChange={(e) => setBetIds(e.target.value)}
+                    />
+                    {c.id === "abandon" && (
+                      <>
+                        <Label className="text-[10px] uppercase text-muted-foreground">
+                          Reason
+                        </Label>
+                        <Input
+                          className="h-7 font-mono text-[11px]"
+                          value={abandonReason}
+                          onChange={(e) => setAbandonReason(e.target.value)}
+                        />
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <Button
+                  size="sm"
+                  variant={c.primary ? "default" : "outline"}
+                  disabled={demo || refreshing}
+                  onClick={() => run(c.id)}
+                  className="mt-auto h-8"
+                >
+                  {refreshing ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : c.id === "place-ack" ? (
+                    <ClipboardCheck className="h-3.5 w-3.5" />
+                  ) : c.id === "abandon" ? (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  ) : (
+                    <Play className="h-3.5 w-3.5" />
+                  )}
+                  Run
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          <div className="section-label flex items-center gap-1.5 mt-1">
+            <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
+            Aux
+          </div>
+          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+            {COMMANDS.filter((c) => c.group === "aux").map((c) => (
+              <div
+                key={c.id}
+                className="glass rounded-xl p-3 flex flex-col gap-2.5 holo-border relative overflow-hidden"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="font-semibold text-sm flex items-center gap-1.5">
+                      <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
+                      nt {c.label}
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {c.hint}
+                    </p>
+                  </div>
+                </div>
+
                 {c.id === "settle" && (
                   <div className="space-y-1.5">
                     <Label className="text-[10px] uppercase text-muted-foreground">
@@ -246,7 +531,7 @@ export function Ops() {
 
                 <Button
                   size="sm"
-                  variant={c.primary ? "default" : "outline"}
+                  variant="outline"
                   disabled={demo || refreshing}
                   onClick={() => run(c.id)}
                   className="mt-auto h-8"
@@ -346,8 +631,9 @@ export function Ops() {
                     <PlaceSlipPreview md={placeThese} />
                   ) : (
                     <p className="text-sm text-muted-foreground py-6 text-center">
-                      No place slip yet — run{" "}
-                      <strong className="text-foreground">nt recommend</strong>.
+                      No place slip yet — board-first:{" "}
+                      <strong className="text-foreground">Board</strong> → Ready
+                      → <strong className="text-foreground">Recommend</strong>.
                     </p>
                   )}
                 </div>
