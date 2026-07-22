@@ -224,7 +224,7 @@ LuminaNT/
 ## Design principles
 
 1. **Code is law** — display and orchestrate, don’t reimplement staking.  
-2. **Empty slip is success when coverage is healthy and `shortlist_with_deep_n` ≥ 1** — honest no-edge after deep research. Coverage starvation / `empty_slip_risk` / critical Coverage Health is a **process miss**, not discipline; surface PLACE_THESE.md with that taxonomy.  
+2. **Empty slip is success when coverage is healthy and `shortlist_with_deep_n` ≥ 1** — honest no-edge after deep research. Starvation and coverage problems surface as **no-research / process-miss** kinds (never success): zero shortlist deep packs → `no_research`; warn → soft miss; critical / `empty_slip_risk` → process miss; missing Coverage Health → fail-closed unavailable.  
 3. **Never hide detail** — notes, evidence, and edges stay one click away.  
 4. **Local first** — ledger stays on disk; only optional AI calls leave the machine.
 

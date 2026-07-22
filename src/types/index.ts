@@ -207,6 +207,34 @@ export interface SettlementReview {
   [key: string]: unknown;
 }
 
+/** Research Coverage Health (`data/state/coverage_health.json`). */
+export interface CoverageHealth {
+  schema_version?: number;
+  source?: string;
+  updated_at?: string;
+  shortlist_n?: number;
+  /** SSOT for empty-slip deep-pack gate (not bare `deep_n`). */
+  shortlist_with_deep_n?: number;
+  shortlist_deep_pct?: number;
+  deep_n?: number;
+  deep_survivable_n?: number;
+  deep_survivable_pct?: number;
+  mid_unresearched_n?: number;
+  empty_slip_risk?: boolean;
+  level?: "ok" | "warn" | "critical" | string;
+  reasons?: string[];
+  force_coverage_active?: boolean;
+  force_coverage_signal?: {
+    target_odds_band?: string;
+    min_deep_packs?: number;
+    prefer?: string[];
+    expires_at?: string;
+    sources?: string[];
+  } | null;
+  soft_gate?: boolean;
+  [key: string]: unknown;
+}
+
 export interface GitStatus {
   is_repo: boolean;
   branch: string;
@@ -369,6 +397,11 @@ export interface TrackerSnapshot {
   control_signals?: ControlSignal[];
   /** Settlement reviews (process_error, packet meta) */
   settlement_reviews?: SettlementReview[];
+  /**
+   * Coverage Health (`data/state/coverage_health.json`).
+   * Optional until Tauri loader wires the path (follow-up: paths + load_snapshot).
+   */
+  coverage_health?: CoverageHealth | Record<string, unknown> | null;
 }
 
 export interface LearningBucket {

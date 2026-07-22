@@ -131,9 +131,9 @@ export function ShortlistBoard() {
   /** Empty board: no place rows and no live ledger cards → empty-slip taxonomy */
   const emptySlip = useMemo(() => {
     if (cards.length > 0) return null;
-    const cov = (snapshot as { coverage_health?: Record<string, unknown> } | null)
-      ?.coverage_health;
-    return classifyEmptySlip(emptySlipInputFromCoverage(true, cov));
+    return classifyEmptySlip(
+      emptySlipInputFromCoverage(true, snapshot?.coverage_health)
+    );
   }, [cards.length, snapshot]);
 
   const totalOpenStake = useMemo(
@@ -472,7 +472,7 @@ export function ShortlistBoard() {
       )}
 
       <div className="flex justify-end gap-2">
-        {emptySlip && !emptySlip.isSuccess ? (
+        {emptySlip ? (
           <>
             <Button
               size="sm"
@@ -493,9 +493,7 @@ export function ShortlistBoard() {
           </>
         ) : (
           <Button size="sm" variant="ghost" onClick={() => setView("workflow")}>
-            {emptySlip?.isSuccess
-              ? "Ops / status →"
-              : "Board → Recommend in Ops →"}
+            Board → Recommend in Ops →
           </Button>
         )}
       </div>
