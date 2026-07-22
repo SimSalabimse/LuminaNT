@@ -23,6 +23,10 @@ import {
   weeklyExploreQuotaChip,
 } from "@/lib/riskStatus";
 import { phaseRadarDims, sizeModeWhy } from "@/lib/phaseRadar";
+import {
+  resolveRunStakeRoom,
+  runStakeChipLabel,
+} from "@/lib/runStake";
 
 /**
  * Capital strip — calm, scannable, mode-dominant.
@@ -135,6 +139,8 @@ export function DeskStrip() {
   const exploreQuotaChip = weeklyExploreQuotaChip(risk, {
     stale: status.staleRiskSchema,
   });
+  const runStake = resolveRunStakeRoom(snapshot);
+  const runStakeLabel = runStakeChipLabel(runStake);
   const regimeId = (status.bankrollRegime || "").toLowerCase();
   // exploration + legacy calibration share amber shell; calibration also forces STALE banner
   const regimeShellExploration =
@@ -484,6 +490,23 @@ export function DeskStrip() {
               }
             />
           )}
+          {runStakeLabel && runStake && (
+            <Sec
+              label="Run stake"
+              value={runStakeLabel}
+              title={[
+                runStake.cap_nok != null ? `cap ${runStake.cap_nok}` : null,
+                runStake.used_nok != null ? `used ${runStake.used_nok}` : null,
+                runStake.binding ? `binding ${runStake.binding}` : null,
+                runStake.equity_cap_nok != null
+                  ? `equity cap ${runStake.equity_cap_nok}`
+                  : null,
+                `source ${runStake.source}`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            />
+          )}
           {status.staleRiskSchema && (
             <Sec label="Risk schema" value="STALE — refresh engine" />
           )}
@@ -613,13 +636,15 @@ function Sec({
   label,
   value,
   tone,
+  title,
 }: {
   label: string;
   value: string;
   tone?: "profit" | "loss" | "pending";
+  title?: string;
 }) {
   return (
-    <div className="flex items-baseline gap-1.5">
+    <div className="flex items-baseline gap-1.5" title={title}>
       <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
         {label}
       </span>

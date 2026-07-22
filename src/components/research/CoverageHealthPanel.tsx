@@ -1,8 +1,9 @@
 /**
  * Coverage Health panel — deep% / surv% / mid unresearched / COV FORCE /
- * empty-slip classification from `coverage_health.json` only.
+ * empty-slip classification + HV v3 funnel chips from `coverage_health.json`.
  *
- * Explicitly out of scope (PR8b): preferred_share / short_main_share bars.
+ * Explicitly out of scope for composition: preferred_share / short_main_share
+ * bars (DeepQueuePanel / deep_queue.json).
  */
 import { useMemo } from "react";
 import { Activity, ShieldAlert } from "lucide-react";
@@ -11,6 +12,7 @@ import { useDataStore } from "@/stores/data-store";
 import {
   classifyEmptySlip,
   emptySlipInputFromCoverage,
+  funnelFromCoverage,
   isCoverageHealthLoaded,
   type EmptySlipKind,
 } from "@/lib/emptySlip";
@@ -59,15 +61,33 @@ function emptySlipTone(kind: EmptySlipKind): {
       return { variant: "loss", label: "Process miss" };
     case "process_miss_soft":
       return { variant: "warning", label: "Soft process miss" };
+    case "clearability_miss":
+      return { variant: "warning", label: "Clearability miss" };
     case "no_research":
       return { variant: "loss", label: "No research" };
     case "coverage_unavailable":
       return { variant: "secondary", label: "Coverage unavailable" };
+    case "risk_block":
+      return { variant: "loss", label: "Risk block" };
     case "has_picks":
       return { variant: "outline", label: "Has picks" };
     default:
       return { variant: "secondary", label: kind };
   }
+}
+
+function formatEv(v: unknown): string {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  const sign = n > 0 ? "+" : "";
+  return `${sign}${n.toFixed(3)}`;
+}
+
+function formatShare(v: unknown): string {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  if (n >= 0 && n <= 1) return `${(n * 100).toFixed(0)}%`;
+  return `${n.toFixed(0)}%`;
 }
 
 export type CoverageHealthPanelProps = {
@@ -95,14 +115,26 @@ export function CoverageHealthPanel({
     [placeEmpty, snapshot?.coverage_health]
   );
 
+  const funnel = useMemo(
+    () => funnelFromCoverage(snapshot?.coverage_health),
+    [snapshot?.coverage_health]
+  );
+
   const level = String(coverage.level ?? "").trim() || "—";
   const levelLower = level.toLowerCase();
   const covForce = Boolean(coverage.force_coverage_active);
   const forceSignal = coverage.force_coverage_signal;
+  const starvationKind = String(coverage.starvation_kind ?? "").trim();
   const reasons = Array.isArray(coverage.reasons)
     ? coverage.reasons.map(String).filter(Boolean)
     : [];
   const slipTone = emptySlipTone(emptySlip.kind);
+  const hasFunnel =
+    funnel != null &&
+    (funnel.n_raw_ev_pass != null ||
+      funnel.median_raw_ev != null ||
+      funnel.clearable_track_share != null ||
+      funnel.second_pass_ran != null);
 
   return (
     <div
@@ -173,6 +205,26 @@ export function CoverageHealthPanel({
               soft_gate
             </Badge>
           )}
+          {starvationKind && starvationKind !== "none" && (
+            <Badge
+              variant={
+                starvationKind === "honest_no_edge"
+                  ? "success"
+                  : starvationKind === "clearability_miss"
+                    ? "warning"
+                    : "loss"
+              }
+              className="h-7 px-2.5 font-mono text-[10px]"
+              title="Engine starvation_kind SSOT"
+            >
+              {starvationKind}
+            </Badge>
+          )}
+          {Boolean(coverage.force_clearability_active) && (
+            <Badge variant="warning" className="h-7 px-2.5 font-bold">
+              CL FORCE
+            </Badge>
+          )}
         </div>
       </div>
 
@@ -228,6 +280,52 @@ export function CoverageHealthPanel({
               hint="shortlist_with_deep_n (empty-slip SSOT)"
             />
           </div>
+
+          {hasFunnel && funnel && (
+            <div className="px-5 py-3 border-t border-white/[0.06] bg-black/15">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-semibold mb-2">
+                Funnel (engine)
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <FunnelChip
+                  label="n_raw_ev_pass"
+                  value={formatCount(funnel.n_raw_ev_pass)}
+                  tone={
+                    funnel.n_raw_ev_pass != null && funnel.n_raw_ev_pass > 0
+                      ? "profit"
+                      : "pending"
+                  }
+                />
+                <FunnelChip
+                  label="median_raw_ev"
+                  value={formatEv(funnel.median_raw_ev)}
+                />
+                <FunnelChip
+                  label="clearable_track"
+                  value={formatShare(funnel.clearable_track_share)}
+                />
+                <FunnelChip
+                  label="second_pass"
+                  value={
+                    funnel.second_pass_ran == null
+                      ? "—"
+                      : funnel.second_pass_ran
+                        ? funnel.second_pass_completed
+                          ? "done"
+                          : "ran"
+                        : "no"
+                  }
+                  tone={
+                    funnel.second_pass_ran
+                      ? "profit"
+                      : funnel.second_pass_ran === false
+                        ? "pending"
+                        : undefined
+                  }
+                />
+              </div>
+            </div>
+          )}
 
           <div className="px-5 py-3 border-t border-white/[0.06] flex flex-wrap items-start gap-3">
             <div className="min-w-0 flex-1 space-y-1.5">
@@ -323,6 +421,36 @@ function Metric({
           "mt-1 text-lg font-semibold font-mono tabular-nums",
           tone === "pending" && "text-pending",
           tone === "loss" && "text-loss",
+          tone === "profit" && "text-profit"
+        )}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function FunnelChip({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "pending" | "profit";
+}) {
+  return (
+    <div
+      className="rounded-lg border border-white/[0.06] bg-card/80 px-3 py-2 text-center"
+      title={label}
+    >
+      <div className="text-[9px] uppercase tracking-[0.1em] text-muted-foreground font-semibold">
+        {label}
+      </div>
+      <div
+        className={cn(
+          "mt-0.5 text-sm font-semibold font-mono tabular-nums",
+          tone === "pending" && "text-pending",
           tone === "profit" && "text-profit"
         )}
       >

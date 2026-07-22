@@ -21,7 +21,9 @@
       "decimal_odds": 2.05,
       "preferred": true,
       "short_main": false,
-      "sport": "football"
+      "sport": "football",
+      "clearability_score": 62.4,
+      "track": "clearable"
     },
     {
       "match": "Alpha vs Beta",
@@ -29,7 +31,9 @@
       "decimal_odds": 2.2,
       "preferred": true,
       "short_main": false,
-      "sport": "football"
+      "sport": "football",
+      "clearability_score": 58.1,
+      "track": "clearable"
     },
     {
       "match": "Gamma vs Delta",
@@ -37,7 +41,9 @@
       "decimal_odds": 1.95,
       "preferred": true,
       "short_main": false,
-      "sport": "football"
+      "sport": "football",
+      "clearability_score": 51.0,
+      "track": "coverage"
     },
     {
       "match": "Epsilon vs Zeta",
@@ -45,7 +51,9 @@
       "decimal_odds": 1.55,
       "preferred": false,
       "short_main": true,
-      "sport": "football"
+      "sport": "football",
+      "clearability_score": 28.5,
+      "track": "coverage"
     },
     {
       "match": "Eta vs Theta",
@@ -53,7 +61,9 @@
       "decimal_odds": 1.9,
       "preferred": true,
       "short_main": false,
-      "sport": "football"
+      "sport": "football",
+      "clearability_score": 44.2,
+      "track": "clearable"
     },
     {
       "match": "Iota vs Kappa",
@@ -61,7 +71,10 @@
       "decimal_odds": 1.88,
       "preferred": false,
       "short_main": false,
-      "sport": "football"
+      "sport": "football",
+      "clearability_score": 39.7,
+      "track": "coverage",
+      "inject": true
     }
   ]
 }

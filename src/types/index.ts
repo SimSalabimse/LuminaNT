@@ -174,6 +174,16 @@ export interface RiskState {
   regime_week_id?: string;
   regime_explore_min_ev?: number | null;
   regime_explore_max_ev?: number | null;
+  /**
+   * HV v3 run-stake audit (optional â€” usually on PLACE_THESE / stake_decisions).
+   * Display only; never invent cap/used/binding client-side.
+   */
+  run_stake_cap_nok?: number | null;
+  run_stake_equity_cap_nok?: number | null;
+  run_stake_remaining_risk_nok?: number | null;
+  run_stake_used_nok?: number | null;
+  run_stake_binding?: string | null;
+  run_stake?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
@@ -207,6 +217,22 @@ export interface SettlementReview {
   [key: string]: unknown;
 }
 
+/**
+ * Funnel KPIs from engine coverage_health / recommend (HV v3).
+ * Display only â€” never invent n_raw_ev_pass client-side.
+ */
+export interface CoverageFunnel {
+  n_raw_ev_pass?: number;
+  median_raw_ev?: number | null;
+  clearable_track_share?: number | null;
+  second_pass_ran?: boolean;
+  second_pass_completed?: boolean;
+  n_packs_with_p?: number;
+  raw_ev_min_ev_bar?: number;
+  haircut?: number;
+  [key: string]: unknown;
+}
+
 /** Research Coverage Health (`data/state/coverage_health.json`). */
 export interface CoverageHealth {
   schema_version?: number;
@@ -232,6 +258,26 @@ export interface CoverageHealth {
     sources?: string[];
   } | null;
   soft_gate?: boolean;
+  /**
+   * Engine starvation_kind SSOT (HV v3):
+   * none | research_starvation | clearability_miss | honest_no_edge |
+   * coverage_critical | risk_block
+   */
+  starvation_kind?: string;
+  /** Top-level funnel mirrors (also under funnel / clearability). */
+  n_raw_ev_pass?: number;
+  median_raw_ev?: number | null;
+  clearable_track_share?: number | null;
+  second_pass_ran?: boolean;
+  second_pass_completed?: boolean;
+  funnel?: CoverageFunnel;
+  clearability?: CoverageFunnel & {
+    force_clearability_active?: boolean;
+  };
+  force_clearability_active?: boolean;
+  force_coverage_overlay_active?: boolean;
+  force_coverage_no_op?: boolean;
+  n_picked?: number;
   [key: string]: unknown;
 }
 
@@ -261,6 +307,15 @@ export interface DeepQueueLine {
   reason?: string;
   prior_ev?: number;
   market_family?: string;
+  /** Engine clearability score when dual-track / PR2 writes it (optional). */
+  clearability_score?: number;
+  /** Dual-track label e.g. clearable | coverage (optional). */
+  track?: string;
+  promotion_score_v3?: number;
+  raw_ev?: number;
+  inject?: boolean;
+  deep_exhausted?: boolean;
+  mode?: string;
   [key: string]: unknown;
 }
 
@@ -661,12 +716,12 @@ export interface AppSettings {
   aiModel: string;
   demoMode: boolean;
   /**
-   * D18 — Opt-in OS toast when coverage_health.level transitions to critical.
+   * D18 ï¿½ Opt-in OS toast when coverage_health.level transitions to critical.
    * Default off. Demo mode never fires.
    */
   notifyCoverageCritical?: boolean;
   /**
-   * D18 — Opt-in OS toast when risk schema becomes stale (pre-package export).
+   * D18 ï¿½ Opt-in OS toast when risk schema becomes stale (pre-package export).
    * Default off. Demo mode never fires.
    */
   notifyStaleRisk?: boolean;

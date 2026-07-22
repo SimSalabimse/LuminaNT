@@ -360,9 +360,12 @@ export function ShortlistBoard() {
             "rounded-2xl border border-dashed px-8 py-14 text-center max-w-2xl mx-auto",
             emptySlip.isSuccess
               ? "border-profit/25 bg-profit/5"
-              : emptySlip.kind === "process_miss"
+              : emptySlip.kind === "process_miss" ||
+                  emptySlip.kind === "risk_block" ||
+                  emptySlip.kind === "no_research"
                 ? "border-loss/30 bg-loss/5"
-                : emptySlip.kind === "process_miss_soft"
+                : emptySlip.kind === "process_miss_soft" ||
+                    emptySlip.kind === "clearability_miss"
                   ? "border-pending/30 bg-pending/5"
                   : "border-white/[0.1] bg-card/50"
           )}
@@ -372,9 +375,12 @@ export function ShortlistBoard() {
               "h-9 w-9 mx-auto mb-3",
               emptySlip.isSuccess
                 ? "text-profit/70"
-                : emptySlip.kind === "process_miss"
+                : emptySlip.kind === "process_miss" ||
+                    emptySlip.kind === "risk_block"
                   ? "text-loss/70"
-                  : "text-muted-foreground/40"
+                  : emptySlip.kind === "clearability_miss"
+                    ? "text-pending/70"
+                    : "text-muted-foreground/40"
             )}
           />
           <p className="text-base font-medium">{emptySlip.title}</p>

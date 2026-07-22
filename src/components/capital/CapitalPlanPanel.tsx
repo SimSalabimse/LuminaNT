@@ -36,6 +36,7 @@ import {
   weeklyExploreQuotaChip,
 } from "@/lib/riskStatus";
 import { phaseRadarDims, sizeModeWhy } from "@/lib/phaseRadar";
+import { resolveRunStakeRoom } from "@/lib/runStake";
 import type { PhaseState, RiskState } from "@/types";
 
 function ProgressTrack({
@@ -139,6 +140,7 @@ export function CapitalPlanPanel() {
   const exploreQuotaChip = weeklyExploreQuotaChip(risk, {
     stale: status.staleRiskSchema,
   });
+  const runStake = resolveRunStakeRoom(snapshot);
 
   const equity = status.equity;
   const secure = status.secure;
@@ -443,6 +445,56 @@ export function CapitalPlanPanel() {
               <Gauge className="h-4 w-4 text-primary" />
               Risk rooms remaining
             </div>
+            {runStake &&
+              (runStake.cap_nok != null || runStake.used_nok != null) && (
+                <div
+                  className="rounded-lg border border-primary/20 bg-primary/[0.06] px-3 py-2.5"
+                  title={`Engine run-stake audit · source ${runStake.source}`}
+                >
+                  <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-semibold">
+                    Run stake room (engine)
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono tabular-nums text-sm">
+                    <span>
+                      used{" "}
+                      <strong>
+                        {runStake.used_nok != null
+                          ? formatNokPlain(runStake.used_nok)
+                          : "—"}
+                      </strong>
+                    </span>
+                    <span className="text-muted-foreground">/</span>
+                    <span>
+                      cap{" "}
+                      <strong>
+                        {runStake.cap_nok != null
+                          ? formatNokPlain(runStake.cap_nok)
+                          : "—"}
+                      </strong>
+                    </span>
+                    {runStake.binding && (
+                      <span className="text-[11px] text-muted-foreground">
+                        binding{" "}
+                        <span className="text-foreground font-semibold">
+                          {runStake.binding}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                  {(runStake.equity_cap_nok != null ||
+                    runStake.remaining_risk_nok != null) && (
+                    <div className="mt-1 text-[11px] text-muted-foreground font-mono">
+                      {runStake.equity_cap_nok != null &&
+                        `equity cap ${formatNokPlain(runStake.equity_cap_nok)}`}
+                      {runStake.equity_cap_nok != null &&
+                        runStake.remaining_risk_nok != null &&
+                        " · "}
+                      {runStake.remaining_risk_nok != null &&
+                        `remaining risk ${formatNokPlain(runStake.remaining_risk_nok)}`}
+                    </div>
+                  )}
+                </div>
+              )}
             <div className="grid grid-cols-2 gap-2.5">
               <RoomCell
                 label="Open risk"

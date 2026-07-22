@@ -2,6 +2,8 @@
 
 Phase **1A** | Equity **563.09** | Remaining risk **10.00** / cap **42.00**
 
+Run stake: used **10** / cap **40** (equity cap **112**, remaining risk **10**) · binding: **phase_remaining**
+
 High odds (>2.5) appear only with grade **A** evidence + elevated EV — never auto-banned.
 
 | # | Match | Selection | Odds | Stake NOK | EV | Grade | Band |
