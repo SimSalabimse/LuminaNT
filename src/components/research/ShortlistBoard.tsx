@@ -28,6 +28,10 @@ import {
   modeBadgeVariant,
   regimeProgressChip,
 } from "@/lib/riskStatus";
+import {
+  classifyEmptySlip,
+  emptySlipInputFromCoverage,
+} from "@/lib/emptySlip";
 
 function StatusIcon({ status }: { status: ShortlistCard["status"] }) {
   if (status === "win") return <CheckCircle2 className="h-5 w-5 text-profit" />;
@@ -123,6 +127,14 @@ export function ShortlistBoard() {
     () => rankCards(buildShortlistCards(snapshot, bets)),
     [snapshot, bets]
   );
+
+  /** Empty board: no place rows and no live ledger cards → empty-slip taxonomy */
+  const emptySlip = useMemo(() => {
+    if (cards.length > 0) return null;
+    const cov = (snapshot as { coverage_health?: Record<string, unknown> } | null)
+      ?.coverage_health;
+    return classifyEmptySlip(emptySlipInputFromCoverage(true, cov));
+  }, [cards.length, snapshot]);
 
   const totalOpenStake = useMemo(
     () =>
@@ -232,22 +244,51 @@ export function ShortlistBoard() {
         </div>
       </div>
 
-      {cards.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/[0.1] bg-card/50 px-8 py-16 text-center max-w-2xl mx-auto">
-          <Shield className="h-9 w-9 text-muted-foreground/40 mx-auto mb-3" />
-          <p className="text-base font-medium">No shortlist yet</p>
+      {cards.length === 0 && emptySlip ? (
+        <div
+          className={cn(
+            "rounded-2xl border border-dashed px-8 py-14 text-center max-w-2xl mx-auto",
+            emptySlip.isSuccess
+              ? "border-profit/25 bg-profit/5"
+              : emptySlip.kind === "process_miss"
+                ? "border-loss/30 bg-loss/5"
+                : emptySlip.kind === "process_miss_soft"
+                  ? "border-pending/30 bg-pending/5"
+                  : "border-white/[0.1] bg-card/50"
+          )}
+        >
+          <Shield
+            className={cn(
+              "h-9 w-9 mx-auto mb-3",
+              emptySlip.isSuccess
+                ? "text-profit/70"
+                : emptySlip.kind === "process_miss"
+                  ? "text-loss/70"
+                  : "text-muted-foreground/40"
+            )}
+          />
+          <p className="text-base font-medium">{emptySlip.title}</p>
           <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto leading-relaxed">
-            Run recommend from Ops to build a place slip. Cards appear here with
-            stake, size mode, and rationale.
+            {emptySlip.detail}
           </p>
-          <Button
-            size="default"
-            variant="outline"
-            className="mt-6"
-            onClick={() => setView("workflow")}
-          >
-            Open Ops
-          </Button>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+            <Button
+              size="default"
+              variant={emptySlip.isSuccess ? "outline" : "default"}
+              onClick={() => setView(emptySlip.primaryCta.view)}
+            >
+              {emptySlip.primaryCta.label}
+            </Button>
+            {emptySlip.secondaryCta && (
+              <Button
+                size="default"
+                variant="outline"
+                onClick={() => setView(emptySlip.secondaryCta!.view)}
+              >
+                {emptySlip.secondaryCta.label}
+              </Button>
+            )}
+          </div>
         </div>
       ) : (
         <div
@@ -430,10 +471,33 @@ export function ShortlistBoard() {
         </div>
       )}
 
-      <div className="flex justify-end">
-        <Button size="sm" variant="ghost" onClick={() => setView("workflow")}>
-          Run recommend in Ops →
-        </Button>
+      <div className="flex justify-end gap-2">
+        {emptySlip && !emptySlip.isSuccess ? (
+          <>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setView(emptySlip.primaryCta.view)}
+            >
+              {emptySlip.primaryCta.label} →
+            </Button>
+            {emptySlip.secondaryCta && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setView(emptySlip.secondaryCta!.view)}
+              >
+                {emptySlip.secondaryCta.label}
+              </Button>
+            )}
+          </>
+        ) : (
+          <Button size="sm" variant="ghost" onClick={() => setView("workflow")}>
+            {emptySlip?.isSuccess
+              ? "Ops / status →"
+              : "Board → Recommend in Ops →"}
+          </Button>
+        )}
       </div>
     </div>
   );
