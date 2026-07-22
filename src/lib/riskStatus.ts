@@ -346,6 +346,107 @@ export function regimeProgressChip(
   };
 }
 
+
+/**
+ * Weekly explore quota chip for Exploration regime only.
+ * Engine fields only — never invents used/max or EV window.
+ *
+ * Hide when:
+ *   - not Exploration (id/label)
+ *   - max is 0 (Survival/Normal package write 0)
+ *   - fields missing (stale → STALE RISK banner; non-stale → omit chip)
+ */
+export type WeeklyExploreQuotaChip = {
+  used: number;
+  max: number;
+  /** Compact primary e.g. "0/2" */
+  quotaLabel: string;
+  /** Operator line e.g. "Explore 0/2" */
+  label: string;
+  /** EV window from engine e.g. "EV 2–4%" when both present */
+  evWindowLabel: string | null;
+  minEv: number | null;
+  maxEv: number | null;
+  /**
+   * True only if values came from note-scan fallback (not engine fields).
+   * Prefer engine fields; derived is optional last resort.
+   */
+  derived: boolean;
+};
+
+/**
+ * Read regime_weekly_explore_used/max + optional EV window for Exploration strip/plan.
+ * Returns null when max is 0, fields missing, or regime is not Exploration.
+ */
+export function weeklyExploreQuotaChip(
+  risk: RiskState | Record<string, unknown> | undefined,
+  opts?: { stale?: boolean }
+): WeeklyExploreQuotaChip | null {
+  const r = (risk || {}) as Record<string, unknown>;
+  const regime =
+    r.regime && typeof r.regime === "object"
+      ? (r.regime as Record<string, unknown>)
+      : null;
+  const id = String(r.bankroll_regime ?? regime?.id ?? "").toLowerCase();
+  const label = String(
+    r.bankroll_regime_label ?? regime?.label ?? ""
+  ).toLowerCase();
+  // Exploration only — legacy calibration relies on STALE banner, not this chip
+  const isExploration =
+    id === "exploration" ||
+    (id === "" && label === "exploration") ||
+    label === "exploration";
+  if (!isExploration) return null;
+
+  const max = num(r.regime_weekly_explore_max);
+  const usedRaw = num(r.regime_weekly_explore_used);
+
+  // Fields missing: hide (stale → banner; non-stale → fail-closed omit)
+  if (max == null) return null;
+  // max 0 means package wrote no weekly explore quota for this regime
+  if (max <= 0) return null;
+
+  const used = usedRaw != null ? Math.max(0, usedRaw) : 0;
+  const minEv = num(r.regime_explore_min_ev);
+  const maxEv = num(r.regime_explore_max_ev);
+
+  let evWindowLabel: string | null = null;
+  if (minEv != null && maxEv != null) {
+    const lo = formatEvPct(minEv);
+    const hi = formatEvPct(maxEv);
+    evWindowLabel = `EV ${lo}–${hi}`;
+  } else if (minEv != null) {
+    evWindowLabel = `EV ≥${formatEvPct(minEv)}`;
+  } else if (maxEv != null) {
+    evWindowLabel = `EV ≤${formatEvPct(maxEv)}`;
+  }
+
+  // opts.stale reserved for future derived note-scan; engine path ignores it
+  void opts?.stale;
+
+  return {
+    used,
+    max,
+    quotaLabel: `${used}/${max}`,
+    label: `Explore ${used}/${max}`,
+    evWindowLabel,
+    minEv,
+    maxEv,
+    derived: false,
+  };
+}
+
+/** Format engine EV fraction (0.02) as compact percent string ("2%"). */
+function formatEvPct(ev: number): string {
+  const pct = ev * 100;
+  // Keep one decimal when needed (e.g. 2.5%), else integer
+  const rounded =
+    Math.abs(pct - Math.round(pct)) < 1e-9
+      ? String(Math.round(pct))
+      : pct.toFixed(1).replace(/\.0$/, "");
+  return `${rounded}%`;
+}
+
 function num(x: unknown): number | null {
   if (x == null || x === "") return null;
   const n = Number(x);

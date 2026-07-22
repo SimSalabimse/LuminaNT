@@ -20,6 +20,7 @@ import {
   modeShellClass,
   regimeChipLabel,
   regimeProgressChip,
+  weeklyExploreQuotaChip,
 } from "@/lib/riskStatus";
 import { phaseRadarDims, sizeModeWhy } from "@/lib/phaseRadar";
 
@@ -129,6 +130,9 @@ export function DeskStrip() {
   // STALE RISK only on live desktop — demo keeps training data without forcing engine refresh
   const showStaleBanner = status.staleRiskSchema && !demo && isTauri();
   const progressChip = regimeProgressChip(risk, {
+    stale: status.staleRiskSchema,
+  });
+  const exploreQuotaChip = weeklyExploreQuotaChip(risk, {
     stale: status.staleRiskSchema,
   });
   const regimeId = (status.bankrollRegime || "").toLowerCase();
@@ -285,6 +289,39 @@ export function DeskStrip() {
           </div>
         )}
 
+        {/* Weekly explore quota — engine fields only; hidden when max 0 / missing */}
+        {exploreQuotaChip && (
+          <div
+            className="flex flex-col items-center justify-center rounded-xl border border-pending/35 bg-pending/10 px-3 py-2 min-w-[92px]"
+            title={[
+              `Weekly explore quota (engine): ${exploreQuotaChip.label}`,
+              exploreQuotaChip.evWindowLabel
+                ? `Explore window ${exploreQuotaChip.evWindowLabel}`
+                : "",
+              exploreQuotaChip.derived ? "derived from notes (not engine fields)" : "",
+            ]
+              .filter(Boolean)
+              .join("\n")}
+          >
+            <span className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
+              Explore
+            </span>
+            <span className="mt-0.5 text-[11px] font-mono font-semibold leading-none">
+              {exploreQuotaChip.quotaLabel}
+            </span>
+            {exploreQuotaChip.evWindowLabel && (
+              <span className="text-[9px] text-muted-foreground mt-0.5 font-mono">
+                {exploreQuotaChip.evWindowLabel}
+              </span>
+            )}
+            {exploreQuotaChip.derived && (
+              <span className="text-[8px] text-amber-200/90 mt-0.5 font-semibold uppercase tracking-wide">
+                derived
+              </span>
+            )}
+          </div>
+        )}
+
         {/* size_mode — large */}
         <div
           className={cn(
@@ -436,6 +473,16 @@ export function DeskStrip() {
           )}
           {progressChip && (
             <Sec label="Regime progress" value={progressChip.label} />
+          )}
+          {exploreQuotaChip && (
+            <Sec
+              label={exploreQuotaChip.derived ? "Explore/wk (derived)" : "Explore/wk"}
+              value={
+                exploreQuotaChip.evWindowLabel
+                  ? `${exploreQuotaChip.quotaLabel} · ${exploreQuotaChip.evWindowLabel}`
+                  : exploreQuotaChip.quotaLabel
+              }
+            />
           )}
           {status.staleRiskSchema && (
             <Sec label="Risk schema" value="STALE — refresh engine" />

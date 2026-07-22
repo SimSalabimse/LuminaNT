@@ -33,6 +33,7 @@ import {
   modeHeroClass,
   nextActionFor,
   regimeProgressChip,
+  weeklyExploreQuotaChip,
 } from "@/lib/riskStatus";
 import { phaseRadarDims, sizeModeWhy } from "@/lib/phaseRadar";
 import type { PhaseState, RiskState } from "@/types";
@@ -133,6 +134,9 @@ export function CapitalPlanPanel() {
   const radar = phaseRadarDims(phase);
   const whyMode = sizeModeWhy(risk, phase);
   const progressChip = regimeProgressChip(risk, {
+    stale: status.staleRiskSchema,
+  });
+  const exploreQuotaChip = weeklyExploreQuotaChip(risk, {
     stale: status.staleRiskSchema,
   });
 
@@ -482,6 +486,20 @@ export function CapitalPlanPanel() {
                     : "std"
                 }
               />
+              {exploreQuotaChip && (
+                <RoomCell
+                  label={
+                    exploreQuotaChip.derived
+                      ? "Weekly explore (derived)"
+                      : "Weekly explore"
+                  }
+                  value={
+                    exploreQuotaChip.evWindowLabel
+                      ? `${exploreQuotaChip.quotaLabel} · ${exploreQuotaChip.evWindowLabel}`
+                      : exploreQuotaChip.quotaLabel
+                  }
+                />
+              )}
             </div>
             {status.bankrollRegime && status.bankrollRegime !== "normal" && (
               <p className="text-[11px] text-muted-foreground leading-snug">
@@ -502,6 +520,41 @@ export function CapitalPlanPanel() {
                   value={progressChip.settledPct}
                   tone="amber"
                   label={progressChip.label}
+                />
+              </div>
+            )}
+            {/* Weekly explore quota — engine used/max + EV window (Exploration only) */}
+            {exploreQuotaChip && (
+              <div className="pt-2 border-t border-white/[0.06] space-y-1.5">
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                  Weekly explore quota
+                  {exploreQuotaChip.derived ? " · derived" : ""}
+                </div>
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <span className="font-mono font-semibold text-sm">
+                    {exploreQuotaChip.label}
+                  </span>
+                  {exploreQuotaChip.evWindowLabel && (
+                    <span className="text-[12px] text-muted-foreground font-mono">
+                      {exploreQuotaChip.evWindowLabel}
+                    </span>
+                  )}
+                </div>
+                <ProgressTrack
+                  value={
+                    exploreQuotaChip.max > 0
+                      ? Math.min(
+                          100,
+                          (exploreQuotaChip.used / exploreQuotaChip.max) * 100
+                        )
+                      : 0
+                  }
+                  tone={
+                    exploreQuotaChip.used >= exploreQuotaChip.max
+                      ? "amber"
+                      : "gold"
+                  }
+                  label={`${exploreQuotaChip.used} of ${exploreQuotaChip.max} used this week`}
                 />
               </div>
             )}
