@@ -42,6 +42,7 @@ import {
   classifyEmptySlip,
   emptySlipInputFromCoverage,
 } from "@/lib/emptySlip";
+import { CoverageHealthPanel } from "@/components/research/CoverageHealthPanel";
 
 /** Ledger Pending (intent) — place-ack target. Not ConfirmedPlaced. */
 function isLedgerPending(result: string | null | undefined): boolean {
@@ -348,6 +349,8 @@ export function ShortlistBoard() {
           )}
         </div>
       </div>
+
+      <CoverageHealthPanel placeEmpty={cards.length === 0} />
 
       {cards.length === 0 && emptySlip ? (
         <div

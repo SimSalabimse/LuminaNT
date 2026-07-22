@@ -399,7 +399,7 @@ export interface TrackerSnapshot {
   settlement_reviews?: SettlementReview[];
   /**
    * Coverage Health (`data/state/coverage_health.json`).
-   * Optional until Tauri loader wires the path (follow-up: paths + load_snapshot).
+   * Loaded by Tauri snapshot path; missing file → empty object (fail-closed UX).
    */
   coverage_health?: CoverageHealth | Record<string, unknown> | null;
 }

@@ -168,6 +168,7 @@ pub fn load_snapshot(root: &Path) -> AppResult<TrackerSnapshot> {
         stake_decisions: parse_jsonl(&paths::stake_decisions_jsonl(root)),
         control_signals: parse_jsonl(&paths::control_signals_jsonl(root)),
         settlement_reviews: parse_jsonl(&paths::settlement_reviews_jsonl(root)),
+        coverage_health: read_json_value(&paths::coverage_health_json(root)),
     })
 }
 

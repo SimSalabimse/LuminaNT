@@ -88,4 +88,7 @@ pub struct TrackerSnapshot {
     /// Settlement reviews JSONL (process_error labels, packets)
     #[serde(default)]
     pub settlement_reviews: Vec<Value>,
+    /// Research Coverage Health (`data/state/coverage_health.json`)
+    #[serde(default)]
+    pub coverage_health: Value,
 }

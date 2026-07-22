@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "source": "research.board",
+  "updated_at": "2026-07-22T15:42:36Z",
+  "shortlist_n": 6,
+  "shortlist_with_deep_n": 4,
+  "shortlist_deep_pct": 0.67,
+  "deep_n": 5,
+  "deep_survivable_n": 3,
+  "deep_survivable_pct": 0.5,
+  "mid_unresearched_n": 1,
+  "empty_slip_risk": false,
+  "level": "ok",
+  "reasons": [
+    "shortlist_deep_pct=0.67 (4/6 deep packs)",
+    "deep_survivable_n=3 on mid band",
+    "mid_unresearched_n=1 remaining"
+  ],
+  "force_coverage_active": false,
+  "force_coverage_signal": null,
+  "soft_gate": false
+}

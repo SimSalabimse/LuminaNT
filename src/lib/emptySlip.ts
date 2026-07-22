@@ -7,11 +7,9 @@
  *
  * Engine Coverage Health remains law; this helper only classifies for UX copy.
  *
- * Follow-up (loader): `coverage_health` is typed on `TrackerSnapshot` but the
- * Tauri snapshot path is not wired yet (`data/state/coverage_health.json`).
- * Until `load_snapshot` reads that file, live desks get `coverage_unavailable`
- * fail-closed copy rather than claiming measured zero packs. Demo/tests may
- * inject `snapshot.coverage_health` directly.
+ * Loader: Tauri `load_snapshot` reads `data/state/coverage_health.json` into
+ * `snapshot.coverage_health`. Missing/empty payload → `coverage_unavailable`
+ * fail-closed (do not claim measured zero packs).
  */
 import type { CoverageHealth, ViewId } from "@/types";
 

@@ -159,6 +159,7 @@ export async function loadDemoSnapshot(): Promise<TrackerSnapshot> {
     edgesRaw,
     config_raw,
     place_these,
+    coverage_health,
   ] = await Promise.all([
     fetchText(`${base}/bets.csv`),
     fetchJson(`${base}/bankroll.json`),
@@ -168,6 +169,7 @@ export async function loadDemoSnapshot(): Promise<TrackerSnapshot> {
     fetchText(`${base}/edges.jsonl`),
     fetchText(`${base}/config.yaml`),
     fetchText(`${base}/PLACE_THESE.md`),
+    fetchJson(`${base}/coverage_health.json`),
   ]);
 
   const edges = edgesRaw
@@ -238,6 +240,7 @@ export async function loadDemoSnapshot(): Promise<TrackerSnapshot> {
     stake_decisions: [],
     control_signals: [],
     settlement_reviews: [],
+    coverage_health: coverage_health as TrackerSnapshot["coverage_health"],
     edges_summary_md: "",
     phase_plan_md: "",
     bankroll_plan_md: "",
