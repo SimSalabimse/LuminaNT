@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { AgentMessage } from "@/types";
 import { runAgentTurn, type AgentContext } from "@/lib/agent";
+import { resolveAllowedModel } from "@/lib/aiModels";
 import { uid } from "@/lib/utils";
 
 interface AgentStore {
@@ -40,6 +41,12 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     const trimmed = text.trim();
     if (!trimmed || get().busy) return;
 
+    // D20: coerce free-form / unknown model IDs to the closed allowlist
+    const safeCtx: AgentContext = {
+      ...ctx,
+      model: resolveAllowedModel(ctx.provider || "xai", ctx.model),
+    };
+
     const userMsg: AgentMessage = {
       id: uid("msg"),
       role: "user",
@@ -49,7 +56,11 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     set((s) => ({ messages: [...s.messages, userMsg], busy: true }));
 
     try {
-      const { reply, toolCalls } = await runAgentTurn(get().messages, trimmed, ctx);
+      const { reply, toolCalls } = await runAgentTurn(
+        get().messages,
+        trimmed,
+        safeCtx
+      );
       const assistant: AgentMessage = {
         id: uid("msg"),
         role: "assistant",

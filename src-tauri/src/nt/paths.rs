@@ -1,4 +1,159 @@
-use std::path::{Path, PathBuf};
+use std::fs;
+use std::path::{Component, Path, PathBuf};
+
+/// Lexically collapse `.` / `..` without touching the filesystem.
+fn normalize_lexically(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for c in path.components() {
+        match c {
+            Component::Prefix(_) | Component::RootDir => {
+                out.push(c.as_os_str());
+            }
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !out.pop() {
+                    out.push(Component::ParentDir.as_os_str());
+                }
+            }
+            Component::Normal(s) => out.push(s),
+        }
+    }
+    out
+}
+
+/// True when `path` is `root` or a descendant (component-wise prefix).
+fn is_under_root(path: &Path, root: &Path) -> bool {
+    let mut path_comps = path.components();
+    for rc in root.components() {
+        match path_comps.next() {
+            Some(pc) if pc == rc => continue,
+            _ => return false,
+        }
+    }
+    true
+}
+
+/// Resolve a user-supplied path so it is absolute and **strictly under** `root`.
+///
+/// - Relative paths are joined onto the canonical repo root.
+/// - Absolute paths must still resolve under the root (no escape).
+/// - Uses lexical normalization plus `canonicalize` of the longest existing prefix
+///   so writes to not-yet-created files are still guarded.
+pub fn resolve_under_root(root: &Path, user_path: &str) -> Result<PathBuf, String> {
+    if user_path.trim().is_empty() {
+        return Err("Empty path".into());
+    }
+
+    let root_canon = fs::canonicalize(root).map_err(|e| {
+        format!(
+            "Cannot resolve tracker root {}: {e}",
+            root.display()
+        )
+    })?;
+
+    let raw = PathBuf::from(user_path);
+    let candidate = if raw.is_absolute() {
+        raw
+    } else {
+        root_canon.join(&raw)
+    };
+
+    let lex = normalize_lexically(&candidate);
+
+    // Resolve filesystem path: canonicalize longest existing ancestor, then re-append tail.
+    let mut suffix: Vec<std::ffi::OsString> = Vec::new();
+    let mut cur = lex.clone();
+    if !cur.exists() {
+        loop {
+            let name = cur
+                .file_name()
+                .ok_or_else(|| format!("Invalid path: {user_path}"))?
+                .to_os_string();
+            if name == "." || name == ".." {
+                return Err(format!("Path traversal not allowed: {user_path}"));
+            }
+            suffix.push(name);
+            cur = cur
+                .parent()
+                .ok_or_else(|| format!("Invalid path: {user_path}"))?
+                .to_path_buf();
+            if cur.exists() || cur.as_os_str().is_empty() {
+                break;
+            }
+        }
+    }
+
+    if !cur.exists() {
+        return Err(format!(
+            "Path not under tracker root (missing ancestor): {user_path}"
+        ));
+    }
+
+    let mut resolved = fs::canonicalize(&cur).map_err(|e| {
+        format!("Cannot resolve path {}: {e}", cur.display())
+    })?;
+    for part in suffix.into_iter().rev() {
+        resolved.push(part);
+    }
+
+    // Re-normalize after push (no `..` expected in suffix) and enforce prefix.
+    let resolved = normalize_lexically(&resolved);
+    if !is_under_root(&resolved, &root_canon) {
+        return Err(format!(
+            "Path escapes tracker root: {user_path} → {} (root {})",
+            resolved.display(),
+            root_canon.display()
+        ));
+    }
+
+    Ok(resolved)
+}
+
+#[cfg(test)]
+mod path_allowlist_tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn allows_path_under_root() {
+        let dir = std::env::temp_dir().join(format!(
+            "luminant_allowlist_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("inbox")).unwrap();
+        let root = fs::canonicalize(&dir).unwrap();
+
+        let p = resolve_under_root(&root, "inbox/foo.txt").unwrap();
+        assert!(is_under_root(&p, &root));
+        assert!(p.ends_with("foo.txt"));
+
+        let abs = root.join("inbox").join("bar.txt");
+        let p2 = resolve_under_root(&root, &abs.to_string_lossy()).unwrap();
+        assert!(is_under_root(&p2, &root));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rejects_escape_with_dotdot() {
+        let dir = std::env::temp_dir().join(format!(
+            "luminant_allowlist_esc_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("inbox")).unwrap();
+        let root = fs::canonicalize(&dir).unwrap();
+
+        let err = resolve_under_root(&root, "inbox/../../outside.txt").unwrap_err();
+        assert!(
+            err.contains("escapes") || err.contains("traversal") || err.contains("not under"),
+            "unexpected err: {err}"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+}
 
 pub fn bets_csv(root: &Path) -> PathBuf {
     root.join("data").join("bets.csv")

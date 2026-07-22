@@ -22,6 +22,7 @@ import {
 } from "@/lib/odds";
 import { loadDemoSnapshot } from "@/lib/demo-data";
 import * as api from "@/lib/tauri";
+import { confirmLedgerMutation } from "@/lib/ntSafety";
 import { useAppStore } from "@/stores/app-store";
 
 interface DataStore {
@@ -381,6 +382,19 @@ export const useDataStore = create<DataStore>((set, get) => ({
       };
       log(fake.stderr);
       return fake;
+    }
+    // PR10: ledger mutations (live recommend / place-ack / abandon / settle) need confirm.
+    if (!confirmLedgerMutation(args)) {
+      const cancelled: CommandResult = {
+        ok: false,
+        exit_code: -1,
+        stdout: "",
+        stderr: "Cancelled by operator (ledger mutation confirm).",
+        command: `python -m nt ${args.join(" ")}`,
+      };
+      log(cancelled.stderr);
+      toast("Command cancelled");
+      return cancelled;
     }
     set({ refreshing: true });
     try {

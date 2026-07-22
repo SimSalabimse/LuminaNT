@@ -13,6 +13,11 @@ import {
 } from "@/components/ui/select";
 import { useAppStore } from "@/stores/app-store";
 import { useDataStore } from "@/stores/data-store";
+import {
+  defaultModelForProvider,
+  modelsForProvider,
+  resolveAllowedModel,
+} from "@/lib/aiModels";
 import { isTauri, pickFolder, setPythonCmd } from "@/lib/tauri";
 import type { AiProvider } from "@/types";
 
@@ -25,10 +30,20 @@ export function Settings() {
   const loadDemo = useDataStore((s) => s.loadDemo);
   const snapshot = useDataStore((s) => s.snapshot);
 
-  const [local, setLocal] = useState(settings);
+  const [local, setLocal] = useState(() => ({
+    ...settings,
+    aiModel: resolveAllowedModel(settings.aiProvider, settings.aiModel),
+  }));
+
+  const modelOptions = modelsForProvider(local.aiProvider);
+  const selectedModel = resolveAllowedModel(local.aiProvider, local.aiModel);
 
   const save = async () => {
-    patchSettings(local);
+    const toSave = {
+      ...local,
+      aiModel: resolveAllowedModel(local.aiProvider, local.aiModel),
+    };
+    patchSettings(toSave);
     if (isTauri() && local.pythonCmd) {
       try {
         await setPythonCmd(local.pythonCmd);
@@ -184,9 +199,14 @@ export function Settings() {
           <Label>Provider</Label>
           <Select
             value={local.aiProvider}
-            onValueChange={(v) =>
-              setLocal((s) => ({ ...s, aiProvider: v as AiProvider }))
-            }
+            onValueChange={(v) => {
+              const aiProvider = v as AiProvider;
+              setLocal((s) => ({
+                ...s,
+                aiProvider,
+                aiModel: defaultModelForProvider(aiProvider),
+              }));
+            }}
           >
             <SelectTrigger>
               <SelectValue />
@@ -208,13 +228,28 @@ export function Settings() {
           />
         </div>
         <div className="space-y-2">
-          <Label>Model override (optional)</Label>
-          <Input
-            className="font-mono text-xs"
-            value={local.aiModel}
-            onChange={(e) => setLocal((s) => ({ ...s, aiModel: e.target.value }))}
-            placeholder="grok-2-latest / gpt-4o-mini / …"
-          />
+          <Label>Model</Label>
+          <Select
+            value={selectedModel}
+            onValueChange={(aiModel) => setLocal((s) => ({ ...s, aiModel }))}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {modelOptions.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.label}
+                  <span className="ml-2 font-mono text-[10px] text-muted-foreground">
+                    {m.id}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Closed allowlist only (D20) — free-form model IDs are rejected.
+          </p>
         </div>
       </section>
 

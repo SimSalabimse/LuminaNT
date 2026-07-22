@@ -48,13 +48,27 @@ pub fn get_data_fingerprint(state: State<'_, AppState>) -> AppResult<String> {
 }
 
 #[tauri::command]
-pub fn read_text_file(path: String) -> AppResult<String> {
-    loader::read_file_text(&path)
+pub fn read_text_file(path: String, state: State<'_, AppState>) -> AppResult<String> {
+    let root = state
+        .repo()
+        .ok_or_else(|| crate::error::AppError::msg("No repo folder selected"))?;
+    let safe = paths::resolve_under_root(&root, &path)
+        .map_err(crate::error::AppError::msg)?;
+    loader::read_file_text(&safe.to_string_lossy())
 }
 
 #[tauri::command]
-pub fn write_text_file(path: String, content: String) -> AppResult<()> {
-    loader::write_file_text(&path, &content)
+pub fn write_text_file(
+    path: String,
+    content: String,
+    state: State<'_, AppState>,
+) -> AppResult<()> {
+    let root = state
+        .repo()
+        .ok_or_else(|| crate::error::AppError::msg("No repo folder selected"))?;
+    let safe = paths::resolve_under_root(&root, &path)
+        .map_err(crate::error::AppError::msg)?;
+    loader::write_file_text(&safe.to_string_lossy(), &content)
 }
 
 #[tauri::command]
@@ -121,12 +135,13 @@ pub fn write_inbox_file(
     let root = state
         .repo()
         .ok_or_else(|| crate::error::AppError::msg("No repo folder selected"))?;
-    // Prevent path traversal
+    // Strip any directory components first, then allowlist-check final path.
     let name = PathBuf::from(&filename)
         .file_name()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_else(|| "upload.txt".into());
-    let path = paths::inbox_dir(&root).join(&name);
+    let rel = format!("inbox/{name}");
+    let path = paths::resolve_under_root(&root, &rel).map_err(crate::error::AppError::msg)?;
     loader::write_file_text(&path.to_string_lossy(), &content)?;
     Ok(path.to_string_lossy().to_string())
 }

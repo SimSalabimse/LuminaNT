@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { AppSettings, ViewId } from "@/types";
+import type { AiProvider, AppSettings, ViewId } from "@/types";
+import {
+  defaultModelForProvider,
+  isAllowedModel,
+  resolveAllowedModel,
+} from "@/lib/aiModels";
 import {
   defaultViewForWorkspace,
   type FilterScope,
@@ -15,9 +20,28 @@ const defaultSettings: AppSettings = {
   watchIntervalMs: 4000,
   aiProvider: "xai",
   aiApiKey: "",
-  aiModel: "",
+  aiModel: defaultModelForProvider("xai"),
   demoMode: false,
 };
+
+/** D20: keep provider/model pair on the closed allowlist. */
+function sanitizeSettingsPatch(
+  current: AppSettings,
+  patch: Partial<AppSettings>
+): Partial<AppSettings> {
+  const next = { ...patch };
+  const provider = (next.aiProvider ?? current.aiProvider) as AiProvider;
+  if (next.aiProvider && next.aiProvider !== current.aiProvider) {
+    // Provider change: drop free-form model; use default for new provider
+    const candidate = next.aiModel ?? current.aiModel;
+    next.aiModel = isAllowedModel(provider, candidate)
+      ? candidate
+      : defaultModelForProvider(provider);
+  } else if (next.aiModel !== undefined) {
+    next.aiModel = resolveAllowedModel(provider, next.aiModel);
+  }
+  return next;
+}
 
 interface AppStore {
   view: ViewId;
@@ -63,7 +87,9 @@ export const useAppStore = create<AppStore>()(
       setFilterScope: (filterScope) => set({ filterScope }),
       settings: defaultSettings,
       patchSettings: (p) =>
-        set((s) => ({ settings: { ...s.settings, ...p } })),
+        set((s) => ({
+          settings: { ...s.settings, ...sanitizeSettingsPatch(s.settings, p) },
+        })),
       sidebarCollapsed: false,
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       commandLog: [],
@@ -95,6 +121,22 @@ export const useAppStore = create<AppStore>()(
         view: s.view,
         filterScope: s.filterScope,
       }),
+      // D20: strip free-form model IDs loaded from older storage
+      merge: (persisted, current) => {
+        const p = (persisted || {}) as Partial<AppStore>;
+        const settings: AppSettings = {
+          ...current.settings,
+          ...(p.settings || {}),
+        };
+        const provider = (settings.aiProvider || "xai") as AiProvider;
+        settings.aiProvider = provider;
+        settings.aiModel = resolveAllowedModel(provider, settings.aiModel);
+        return {
+          ...current,
+          ...p,
+          settings,
+        };
+      },
     }
   )
 );

@@ -8,6 +8,11 @@ import type {
   TrackerSnapshot,
 } from "@/types";
 import { breakdownBy, computeMetrics, filterBets, emptyFilters } from "@/lib/analytics";
+import {
+  defaultModelForProvider,
+  resolveAllowedModel,
+} from "@/lib/aiModels";
+import { confirmLedgerMutation, isLedgerMutatingNt } from "@/lib/ntSafety";
 import { truncate } from "@/lib/utils";
 
 export interface AgentContext {
@@ -97,6 +102,21 @@ function runTool(
   ctx: AgentContext
 ): string {
   const bets = ctx.filtered.length ? ctx.filtered : ctx.bets;
+
+  // Hard guard: no tool may mutate the ledger without going through confirmAgentLedgerMutation.
+  // Current tool surface is read-only; reject any accidental run_nt-style names.
+  if (
+    name === "run_nt" ||
+    name === "recommend" ||
+    name === "place_ack" ||
+    name === "place-ack" ||
+    name === "abandon" ||
+    name === "settle"
+  ) {
+    return JSON.stringify({
+      error: `Tool "${name}" is not available. Ledger mutations require an explicit Ops desk action with operator confirm.`,
+    });
+  }
 
   switch (name) {
     case "get_metrics": {
@@ -216,9 +236,17 @@ function endpoint(provider: AiProvider): { url: string; headers: (key: string) =
 }
 
 function defaultModel(provider: AiProvider): string {
-  if (provider === "openai") return "gpt-4o-mini";
-  if (provider === "anthropic") return "claude-3-5-sonnet-latest";
-  return "grok-2-latest";
+  return defaultModelForProvider(provider);
+}
+
+/**
+ * Agent tools are read-only (metrics / search / status / edges).
+ * If a future tool invokes ledger-mutating `run_nt`, call this before invoke.
+ * Returns false when the operator cancels the confirm dialog.
+ */
+export function confirmAgentLedgerMutation(args: string[]): boolean {
+  if (!isLedgerMutatingNt(args)) return true;
+  return confirmLedgerMutation(args);
 }
 
 export async function runAgentTurn(
@@ -236,7 +264,8 @@ export async function runAgentTurn(
   }
 
   const provider = ctx.provider || "xai";
-  const model = ctx.model || defaultModel(provider);
+  // D20: never send free-form / unknown model IDs to the API
+  const model = resolveAllowedModel(provider, ctx.model);
   const ep = endpoint(provider);
   const toolCalls: AgentToolCall[] = [];
 

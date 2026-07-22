@@ -8,6 +8,7 @@ import { useDataStore } from "@/stores/data-store";
 import { useAppStore } from "@/stores/app-store";
 import { useFilteredBets, useMetrics } from "@/hooks/use-tracker-data";
 import { AGENT_SUGGESTIONS } from "@/lib/agent";
+import { resolveAllowedModel } from "@/lib/aiModels";
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 
@@ -30,6 +31,11 @@ export function Agent({ embedded = false }: { embedded?: boolean }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
 
+  const allowedModel = resolveAllowedModel(
+    settings.aiProvider,
+    settings.aiModel
+  );
+
   const ctx = {
     bets,
     filtered,
@@ -38,7 +44,7 @@ export function Agent({ embedded = false }: { embedded?: boolean }) {
     edges: snapshot?.edges || [],
     provider: settings.aiProvider,
     apiKey: settings.aiApiKey || import.meta.env.VITE_XAI_API_KEY || "",
-    model: settings.aiModel,
+    model: allowedModel,
   };
 
   const onSend = async (text?: string) => {
@@ -71,7 +77,7 @@ export function Agent({ embedded = false }: { embedded?: boolean }) {
         <div className="flex items-center gap-2">
           <Badge variant="secondary" className="font-mono text-[10px]">
             {settings.aiProvider}
-            {settings.aiModel ? ` · ${settings.aiModel}` : ""}
+            {allowedModel ? ` · ${allowedModel}` : ""}
           </Badge>
           {!settings.aiApiKey && !import.meta.env.VITE_XAI_API_KEY && (
             <Button size="sm" variant="outline" onClick={() => setView("settings")}>

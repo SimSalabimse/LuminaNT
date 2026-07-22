@@ -194,16 +194,7 @@ export function Ops() {
           return;
         }
       }
-      if (!dryRun) {
-        const okLive = window.confirm(
-          "Live recommend will append Pending rows to the ledger.\n\n" +
-            "Confirm odds path and board freshness, then place on NT and place-ack."
-        );
-        if (!okLive) {
-          setToast("Live recommend cancelled");
-          return;
-        }
-      }
+      // Live recommend / place-ack / abandon / settle: confirm via data-store.runNt (PR10).
       args = ["recommend", "--odds", oddsPath];
       if (dryRun) args.push("--dry-run");
       if (allowLowCoverage) args.push("--allow-low-coverage");
@@ -221,13 +212,6 @@ export function Ops() {
         return;
       }
       const reason = abandonReason.trim() || "not_placed";
-      const ok = window.confirm(
-        `Abandon bet(s) ${ids}?\nReason: ${reason}\n\nFrees open risk · P/L 0.`
-      );
-      if (!ok) {
-        setToast("Abandon cancelled");
-        return;
-      }
       args = ["abandon", "--ids", ids, "--reason", reason];
     } else if (id === "settle") {
       args = ["settle", "--results", resultsPath];
