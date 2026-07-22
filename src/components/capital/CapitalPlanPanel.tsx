@@ -32,6 +32,7 @@ import {
   gateBadgeVariant,
   modeHeroClass,
   nextActionFor,
+  regimeProgressChip,
 } from "@/lib/riskStatus";
 import { phaseRadarDims, sizeModeWhy } from "@/lib/phaseRadar";
 import type { PhaseState, RiskState } from "@/types";
@@ -131,6 +132,9 @@ export function CapitalPlanPanel() {
   const next = nextActionFor(status);
   const radar = phaseRadarDims(phase);
   const whyMode = sizeModeWhy(risk, phase);
+  const progressChip = regimeProgressChip(risk, {
+    stale: status.staleRiskSchema,
+  });
 
   const equity = status.equity;
   const secure = status.secure;
@@ -196,6 +200,29 @@ export function CapitalPlanPanel() {
 
   return (
     <div className="space-y-6">
+      {status.staleRiskSchema && !demo && (
+        <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-amber-100">
+              STALE RISK
+            </div>
+            <p className="text-sm text-amber-50/90 mt-0.5 leading-snug">
+              Pre-package risk schema — run engine Refresh before trusting regime caps /
+              min-EV. UI shows raw engine fields only (no invented 50 NOK / 4%).
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-amber-400/50 text-amber-50 bg-amber-500/15 shrink-0"
+            disabled={busy}
+            onClick={() => refresh({ runNtRefresh: isTauri() })}
+          >
+            Refresh engine
+          </Button>
+        </div>
+      )}
+
       {/* Hero — current status is the page lead */}
       <div
         className={cn(
@@ -345,6 +372,18 @@ export function CapitalPlanPanel() {
             { label: "Riskable liquid", value: formatNokPlain(status.liquid), hint: "− open" },
             { label: "Unit", value: formatNokPlain(status.unit), hint: "ladder" },
             { label: "Remaining", value: formatNokPlain(status.remaining), hint: "new risk room" },
+            {
+              label: "Regime",
+              value: String(
+                status.bankrollRegimeLabel || status.bankrollRegime || "—"
+              ),
+              hint:
+                status.regimeOpenCap != null
+                  ? `open cap ${formatNokPlain(status.regimeOpenCap)} (engine)`
+                  : status.staleRiskSchema
+                    ? "stale schema — refresh"
+                    : "no regime cap",
+            },
           ].map((m) => (
             <div
               key={m.label}
@@ -426,7 +465,51 @@ export function CapitalPlanPanel() {
                   status.weeklyRoom != null ? formatNokPlain(status.weeklyRoom) : "—"
                 }
               />
+              <RoomCell
+                label="Regime open-risk cap"
+                value={
+                  status.regimeOpenCap != null
+                    ? formatNokPlain(status.regimeOpenCap)
+                    : "—"
+                }
+              />
+              <RoomCell
+                label="Regime min-EV"
+                value={
+                  status.regimeMinEv != null
+                    ? `${(status.regimeMinEv * 100).toFixed(0)}%`
+                    : "std"
+                }
+              />
             </div>
+            {status.bankrollRegime && status.bankrollRegime !== "normal" && (
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                {status.bankrollRegimeLabel}: open cap is pending-only and frees on
+                settlement. Values are engine-written — never recomputed in UI.
+                {status.staleRiskSchema
+                  ? " STALE schema: do not map legacy calibration exits to package Exploration 40."
+                  : ""}
+              </p>
+            )}
+            {/* Progress only when package schema is fresh */}
+            {progressChip && (
+              <div className="pt-2 border-t border-white/[0.06] space-y-2">
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                  Regime progress
+                </div>
+                <ProgressTrack
+                  value={progressChip.settledPct}
+                  tone="amber"
+                  label={progressChip.label}
+                />
+              </div>
+            )}
+            {status.staleRiskSchema && !progressChip && (
+              <p className="text-[11px] text-amber-100/80 pt-1">
+                Regime progress hidden while schema is stale (would misread
+                calibration_exit as Exploration target).
+              </p>
+            )}
           </div>
         </div>
       </div>

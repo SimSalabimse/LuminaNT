@@ -18,13 +18,14 @@ import {
   deriveRiskStatus,
   gateBadgeVariant,
   modeShellClass,
+  regimeProgressChip,
 } from "@/lib/riskStatus";
 import { phaseRadarDims, sizeModeWhy } from "@/lib/phaseRadar";
 
 /**
  * Capital strip — calm, scannable, mode-dominant.
- * Primary: Equity · Liquid · Open Risk · DD% · size_mode · Can Bet
- * Secondary (collapsed): rooms, unit, phase, scope
+ * Primary: Equity · Liquid · Open Risk · DD% · Regime · size_mode · Can Bet
+ * Secondary (collapsed): rooms, unit, phase, regime progress, scope
  */
 export function DeskStrip() {
   const snapshot = useDataStore((s) => s.snapshot);
@@ -124,6 +125,16 @@ export function DeskStrip() {
     capitalMode !== status.sizeMode &&
     status.sizeMode !== "LEGACY";
 
+  // STALE RISK only on live desktop — demo keeps training data without forcing engine refresh
+  const showStaleBanner = status.staleRiskSchema && !demo && isTauri();
+  const progressChip = regimeProgressChip(risk, {
+    stale: status.staleRiskSchema,
+  });
+  const regimeId = (status.bankrollRegime || "").toLowerCase();
+  // exploration + legacy calibration share amber shell; calibration also forces STALE banner
+  const regimeShellExploration =
+    regimeId === "exploration" || regimeId === "calibration";
+
   return (
     <div
       className={cn(
@@ -131,6 +142,26 @@ export function DeskStrip() {
         modeShellClass(status.sizeMode)
       )}
     >
+      {/* STALE RISK — pre-package risk.json; do not trust regime caps until engine refresh */}
+      {showStaleBanner && (
+        <div className="px-4 py-1.5 text-center text-[12px] font-semibold tracking-wide border-b bg-amber-500/15 border-amber-500/30 text-amber-100 flex flex-wrap items-center justify-center gap-2">
+          <span>
+            STALE RISK — pre-package state; run Refresh (engine) before betting.
+            Regime numbers may be wrong (do not invent caps in UI).
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1.5 border-amber-400/50 text-amber-50 bg-amber-500/20 hover:bg-amber-500/30"
+            onClick={onRefresh}
+            disabled={refreshing}
+          >
+            <RefreshCw className={cn("h-3 w-3", refreshing && "animate-spin")} />
+            Refresh engine
+          </Button>
+        </div>
+      )}
+
       {/* Mode banner when not NORMAL — dominant language */}
       {modeNotNormal && (
         <div
@@ -179,6 +210,71 @@ export function DeskStrip() {
         />
 
         <div className="flex-1 min-w-[12px]" />
+
+        {/* Bankroll regime — Exploration / Survival / Normal (+ legacy calibration + STALE) */}
+        <div
+          className={cn(
+            "flex flex-col items-center justify-center rounded-xl border px-3 py-2 min-w-[92px]",
+            regimeShellExploration && "border-pending/40 bg-pending/12",
+            regimeId === "survival" && "border-amber-500/40 bg-amber-500/10",
+            (regimeId === "normal" || !regimeId) && "border-white/10 bg-white/5",
+            status.staleRiskSchema && "ring-1 ring-amber-400/40"
+          )}
+          title={[
+            `Regime: ${status.bankrollRegimeLabel || status.bankrollRegime || "—"}`,
+            status.staleRiskSchema
+              ? "STALE RISK schema — refresh engine; raw engine values shown"
+              : "",
+            status.regimeOpenCap != null
+              ? `Open-risk cap ${status.regimeOpenCap} NOK (pending only, engine)`
+              : "No regime open-risk cap",
+            status.regimeMinEv != null
+              ? `Min-EV floor ${(status.regimeMinEv * 100).toFixed(0)}% (engine)`
+              : "Standard min-EV",
+          ]
+            .filter(Boolean)
+            .join("\n")}
+        >
+          <span className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
+            Regime
+          </span>
+          <span className="mt-0.5 text-sm font-bold leading-none">
+            {(status.bankrollRegimeLabel || status.bankrollRegime || "—")
+              .toString()
+              .slice(0, 14)}
+          </span>
+          {status.regimeOpenCap != null && (
+            <span className="text-[9px] text-muted-foreground mt-0.5 font-mono">
+              cap {formatNokPlain(status.regimeOpenCap)}
+            </span>
+          )}
+          {status.staleRiskSchema && (
+            <span className="text-[8px] text-amber-200/90 mt-0.5 font-semibold uppercase tracking-wide">
+              stale
+            </span>
+          )}
+        </div>
+
+        {/* Package progress — only when not stale (never map calibration_exit → Exploration 40) */}
+        {progressChip && (
+          <div
+            className="flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-2 min-w-[100px]"
+            title={`Regime progress (engine): ${progressChip.label}`}
+          >
+            <span className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
+              Progress
+            </span>
+            <span className="mt-0.5 text-[11px] font-mono font-semibold leading-none">
+              {progressChip.settled}/{progressChip.exitSettled}
+            </span>
+            <div className="mt-1 h-1 w-full max-w-[72px] rounded-full bg-black/40 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-pending/80"
+                style={{ width: `${progressChip.settledPct}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* size_mode — large */}
         <div
@@ -314,6 +410,27 @@ export function DeskStrip() {
             tone={util >= 0.95 ? "loss" : util >= 0.8 ? "pending" : undefined}
           />
           <Sec label="Phase" value={String(phase.phase_id ?? "—")} />
+          {status.bankrollRegime && (
+            <Sec
+              label="Regime"
+              value={String(status.bankrollRegimeLabel || status.bankrollRegime)}
+            />
+          )}
+          {status.regimeOpenCap != null && (
+            <Sec label="Regime cap" value={formatNokPlain(status.regimeOpenCap)} />
+          )}
+          {status.regimeMinEv != null && (
+            <Sec
+              label="Regime min-EV"
+              value={`${(status.regimeMinEv * 100).toFixed(0)}%`}
+            />
+          )}
+          {progressChip && (
+            <Sec label="Regime progress" value={progressChip.label} />
+          )}
+          {status.staleRiskSchema && (
+            <Sec label="Risk schema" value="STALE — refresh engine" />
+          )}
 
           {/* Phase health mini bars */}
           <div className="flex items-end gap-1.5 h-8" title={whyMode.join(" · ")}>

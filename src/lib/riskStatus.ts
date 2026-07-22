@@ -1,8 +1,15 @@
 /**
  * Single source of truth for “Can I bet right now?” across strip, desk, plan.
  * Derives operator-facing status from engine risk.json (capital_v2 + legacy).
+ * Never invents regime caps / min-EV / exit targets — display engine fields only.
  */
-import type { RiskState, PhaseState, BankrollState } from "@/types";
+import type {
+  RiskState,
+  PhaseState,
+  BankrollState,
+  RegimeProgress,
+  BankrollRegimeDetail,
+} from "@/types";
 
 export type SizeMode = "NORMAL" | "REDUCED" | "FROZEN" | "LEGACY";
 
@@ -40,6 +47,19 @@ export type RiskStatus = {
   openRoom: number | null;
   todayPl: number | null;
   phaseId: string;
+  /**
+   * Engine bankroll_regime id: exploration | survival | normal
+   * (or legacy stale `calibration`).
+   */
+  bankrollRegime: string | null;
+  /** Operator label; calibration aliased as Exploration (legacy) only */
+  bankrollRegimeLabel: string | null;
+  /** Raw engine open-risk cap — never invent 50 in TS */
+  regimeOpenCap: number | null;
+  /** Raw engine min-EV floor — never invent 0.04 in TS */
+  regimeMinEv: number | null;
+  /** Pre-package / pre-Exploration export shape */
+  staleRiskSchema: boolean;
 };
 
 export function deriveRiskStatus(
@@ -97,6 +117,32 @@ export function deriveRiskStatus(
       ? Math.max(0, weeklyLim + Math.min(0, weekPl))
       : null;
   const openRoom = num(r.portfolio_open_room_nok);
+
+  const regimeObj =
+    r.regime && typeof r.regime === "object"
+      ? (r.regime as BankrollRegimeDetail)
+      : null;
+  const bankrollRegime =
+    r.bankroll_regime != null
+      ? String(r.bankroll_regime)
+      : regimeObj?.id != null
+        ? String(regimeObj.id)
+        : null;
+  const rawLabel =
+    r.bankroll_regime_label != null
+      ? String(r.bankroll_regime_label)
+      : regimeObj?.label != null
+        ? String(regimeObj.label)
+        : bankrollRegime;
+  // Alias calibration as legacy Exploration only — never rewrite numeric caps
+  const bankrollRegimeLabel =
+    bankrollRegime != null &&
+    bankrollRegime.toLowerCase() === "calibration"
+      ? "Exploration (legacy)"
+      : rawLabel;
+  const regimeOpenCap = num(r.regime_open_risk_cap_nok ?? regimeObj?.open_risk_cap_nok);
+  const regimeMinEv = num(r.regime_min_ev ?? regimeObj?.min_ev);
+  const staleRiskSchema = isStaleRiskSchema(r);
 
   // Unified gate — priority matches engine fail-closed order
   let gate: BettingGate = "CLEAR";
@@ -159,6 +205,119 @@ export function deriveRiskStatus(
     openRoom,
     todayPl,
     phaseId: String(p.phase_id || r.phase_id || "—"),
+    bankrollRegime,
+    bankrollRegimeLabel,
+    regimeOpenCap,
+    regimeMinEv,
+    staleRiskSchema,
+  };
+}
+
+/**
+ * True when risk.json is pre-package / pre-Exploration export shape.
+ * Requires capital_v2 ON, and any of:
+ *   - bankroll_regime id is legacy `calibration`
+ *   - regime present but package `regime_weekly_explore_max` missing
+ *   - progress present but package `exploration_exit` missing
+ *     (e.g. only `calibration_exit` — never treat as Exploration 40)
+ * Never invents package numeric law in TS — only detects drift.
+ */
+export function isStaleRiskSchema(
+  risk: RiskState | Record<string, unknown> | undefined
+): boolean {
+  const r = (risk || {}) as Record<string, unknown>;
+  if (r.capital_v2_enabled !== true) return false;
+
+  const regime =
+    r.regime && typeof r.regime === "object"
+      ? (r.regime as Record<string, unknown>)
+      : null;
+  const id = String(r.bankroll_regime ?? regime?.id ?? "").toLowerCase();
+  if (id === "calibration") return true;
+
+  const hasRegimeSignal = r.bankroll_regime != null || regime?.id != null;
+  if (hasRegimeSignal && r.regime_weekly_explore_max === undefined) return true;
+
+  const progress =
+    regime?.progress && typeof regime.progress === "object"
+      ? (regime.progress as Record<string, unknown>)
+      : null;
+  if (progress != null && progress.exploration_exit == null) return true;
+
+  return false;
+}
+
+/** Fresh package progress for Exploration/Survival chip — never from calibration_exit. */
+export type RegimeProgressChip = {
+  /** Short operator line e.g. "12/40 settled · eq 520/650" */
+  label: string;
+  /** 0–100 bar toward current regime exit (settled-based) */
+  settledPct: number;
+  settled: number;
+  exitSettled: number;
+  equity: number | null;
+  exitEquity: number | null;
+};
+
+/**
+ * Progress chip data only for non-stale package risk.
+ * When stale: returns null (do not map calibration_exit:30 → Exploration 40).
+ */
+export function regimeProgressChip(
+  risk: RiskState | Record<string, unknown> | undefined,
+  opts?: { stale?: boolean }
+): RegimeProgressChip | null {
+  const r = (risk || {}) as Record<string, unknown>;
+  const stale = opts?.stale ?? isStaleRiskSchema(r);
+  if (stale) return null;
+
+  const regime =
+    r.regime && typeof r.regime === "object"
+      ? (r.regime as Record<string, unknown>)
+      : null;
+  const progress =
+    regime?.progress && typeof regime.progress === "object"
+      ? (regime.progress as RegimeProgress)
+      : null;
+  if (!progress || progress.exploration_exit == null) return null;
+
+  const id = String(r.bankroll_regime ?? regime?.id ?? "normal").toLowerCase();
+  if (id === "normal" || id === "") return null;
+
+  const settled = num(progress.settled) ?? num(r.regime_settled_count) ?? 0;
+  const equity = num(regime?.equity_nok ?? r.equity_nok);
+
+  let exitSettled: number | null = null;
+  let exitEquity: number | null = null;
+  if (id === "exploration") {
+    exitSettled = num(progress.exploration_exit);
+    exitEquity = num(progress.exploration_exit_equity);
+  } else if (id === "survival") {
+    exitSettled = num(progress.survival_exit);
+    exitEquity = num(progress.survival_exit_equity);
+  } else {
+    // Unknown non-normal package id — use exploration_exit only if present (already checked)
+    exitSettled = num(progress.exploration_exit);
+    exitEquity = num(progress.exploration_exit_equity);
+  }
+  if (exitSettled == null || exitSettled <= 0) return null;
+
+  const settledPct = Math.max(
+    0,
+    Math.min(100, (settled / exitSettled) * 100)
+  );
+  const parts = [`${settled}/${exitSettled} settled`];
+  if (equity != null && exitEquity != null) {
+    parts.push(`eq ${Math.round(equity)}/${Math.round(exitEquity)}`);
+  }
+
+  return {
+    label: parts.join(" · "),
+    settledPct,
+    settled,
+    exitSettled,
+    equity,
+    exitEquity,
   };
 }
 

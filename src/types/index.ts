@@ -111,6 +111,31 @@ export interface PhaseState {
   [key: string]: unknown;
 }
 
+/** Engine regime.progress (package schema). Never map calibration_exit → exploration_exit. */
+export interface RegimeProgress {
+  settled?: number;
+  /** Package: settled target to leave Exploration */
+  exploration_exit?: number;
+  /** Package: settled target to leave Survival */
+  survival_exit?: number;
+  exploration_exit_equity?: number;
+  survival_exit_equity?: number;
+  /** Stale pre-package key only — do not treat as Exploration 40 */
+  calibration_exit?: number;
+  [key: string]: unknown;
+}
+
+/** Nested regime object from evaluate_bankroll_regime (risk.regime). */
+export interface BankrollRegimeDetail {
+  id?: string;
+  label?: string;
+  min_ev?: number | null;
+  open_risk_cap_nok?: number | null;
+  progress?: RegimeProgress;
+  schema_version?: number;
+  [key: string]: unknown;
+}
+
 export interface RiskState {
   date?: string;
   equity_nok?: number;
@@ -131,6 +156,24 @@ export interface RiskState {
   research_only?: boolean;
   high_odds_stress_block?: boolean;
   phase_health?: Record<string, unknown>;
+  /**
+   * Early-bankroll regime id from engine (nt/bankroll_regime).
+   * Package law: Exploration → Survival → Normal.
+   * Legacy disk may still say `calibration` — treat as stale (never silent rename of caps).
+   */
+  bankroll_regime?: string;
+  bankroll_regime_label?: string;
+  regime?: BankrollRegimeDetail;
+  /** Engine open-risk cap under Exploration/Survival — display only, never invent */
+  regime_open_risk_cap_nok?: number | null;
+  regime_min_ev?: number | null;
+  regime_settled_count?: number;
+  /** Engine risk merge fields (nt/risk.py _merge_bankroll_regime) */
+  regime_weekly_explore_used?: number;
+  regime_weekly_explore_max?: number;
+  regime_week_id?: string;
+  regime_explore_min_ev?: number | null;
+  regime_explore_max_ev?: number | null;
   [key: string]: unknown;
 }
 

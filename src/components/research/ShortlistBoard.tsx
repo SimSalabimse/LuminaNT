@@ -23,7 +23,11 @@ import { buildShortlistCards, type ShortlistCard } from "@/lib/capital";
 import { formatNokPlain, cn } from "@/lib/utils";
 import { deriveGateChips } from "@/lib/gateChips";
 import { activeControlSignals } from "@/lib/phaseRadar";
-import { deriveRiskStatus, modeBadgeVariant } from "@/lib/riskStatus";
+import {
+  deriveRiskStatus,
+  modeBadgeVariant,
+  regimeProgressChip,
+} from "@/lib/riskStatus";
 
 function StatusIcon({ status }: { status: ShortlistCard["status"] }) {
   if (status === "win") return <CheckCircle2 className="h-5 w-5 text-profit" />;
@@ -99,6 +103,11 @@ export function ShortlistBoard() {
   const status = useMemo(
     () => deriveRiskStatus(snapshot?.risk, snapshot?.bankroll, snapshot?.phase),
     [snapshot]
+  );
+  const progressChip = useMemo(
+    () =>
+      regimeProgressChip(snapshot?.risk, { stale: status.staleRiskSchema }),
+    [snapshot?.risk, status.staleRiskSchema]
   );
 
   const activeSignals = useMemo(
@@ -176,6 +185,51 @@ export function ShortlistBoard() {
           >
             {status.betLabel}
           </Badge>
+          {status.staleRiskSchema && (
+            <Badge
+              variant="warning"
+              className="h-8 px-3 font-bold"
+              title="Pre-package risk schema — run engine Refresh. Caps/min-EV may be wrong."
+            >
+              STALE RISK
+            </Badge>
+          )}
+          {status.bankrollRegime && (
+            <Badge
+              variant={
+                status.bankrollRegime === "normal" ? "secondary" : "outline"
+              }
+              className={cn(
+                "h-8 px-3 font-mono",
+                (status.bankrollRegime === "exploration" ||
+                  status.bankrollRegime === "calibration") &&
+                  "border-pending/40 text-pending"
+              )}
+              title={
+                status.regimeOpenCap != null
+                  ? `Open cap ${status.regimeOpenCap} (engine) · min-EV ${
+                      status.regimeMinEv != null
+                        ? `${(status.regimeMinEv * 100).toFixed(0)}%`
+                        : "std"
+                    }`
+                  : "Normal regime"
+              }
+            >
+              {status.bankrollRegimeLabel || status.bankrollRegime}
+              {status.regimeOpenCap != null
+                ? ` · cap ${formatNokPlain(status.regimeOpenCap)}`
+                : ""}
+            </Badge>
+          )}
+          {progressChip && (
+            <Badge
+              variant="secondary"
+              className="h-8 px-3 font-mono"
+              title={`Regime progress: ${progressChip.label}`}
+            >
+              {progressChip.settled}/{progressChip.exitSettled} exit
+            </Badge>
+          )}
         </div>
       </div>
 
