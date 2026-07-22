@@ -143,6 +143,16 @@ export function DeskStrip() {
         modeShellClass(status.sizeMode)
       )}
     >
+      {/* Always-on DEMO chrome — training snapshot, mutators off */}
+      {demo && (
+        <div
+          role="status"
+          className="px-4 py-1.5 text-center text-[12px] font-semibold tracking-wide border-b bg-pending/15 border-pending/30 text-pending"
+        >
+          DEMO — read-only training snapshot · mutators disabled · not live money
+        </div>
+      )}
+
       {/* STALE RISK — pre-package risk.json; do not trust regime caps until engine refresh */}
       {showStaleBanner && (
         <div className="px-4 py-1.5 text-center text-[12px] font-semibold tracking-wide border-b bg-amber-500/15 border-amber-500/30 text-amber-100 flex flex-wrap items-center justify-center gap-2">
