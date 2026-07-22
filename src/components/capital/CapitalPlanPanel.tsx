@@ -200,7 +200,8 @@ export function CapitalPlanPanel() {
 
   return (
     <div className="space-y-6">
-      {status.staleRiskSchema && !demo && (
+      {/* Live Tauri only (same gate as DeskStrip) — browser cannot rewrite risk.json */}
+      {status.staleRiskSchema && !demo && isTauri() && (
         <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-wider text-amber-100">
@@ -216,7 +217,7 @@ export function CapitalPlanPanel() {
             variant="outline"
             className="border-amber-400/50 text-amber-50 bg-amber-500/15 shrink-0"
             disabled={busy}
-            onClick={() => refresh({ runNtRefresh: isTauri() })}
+            onClick={() => refresh({ runNtRefresh: true })}
           >
             Refresh engine
           </Button>
@@ -364,7 +365,7 @@ export function CapitalPlanPanel() {
         </div>
 
         {/* Capital metrics */}
-        <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
           {[
             { label: "Equity", value: formatNokPlain(equity), hint: "ledger" },
             { label: "Secure", value: formatNokPlain(secure), hint: "non-risked" },

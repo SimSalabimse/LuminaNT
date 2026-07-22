@@ -18,6 +18,7 @@ import {
   deriveRiskStatus,
   gateBadgeVariant,
   modeShellClass,
+  regimeChipLabel,
   regimeProgressChip,
 } from "@/lib/riskStatus";
 import { phaseRadarDims, sizeModeWhy } from "@/lib/phaseRadar";
@@ -238,10 +239,8 @@ export function DeskStrip() {
           <span className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
             Regime
           </span>
-          <span className="mt-0.5 text-sm font-bold leading-none">
-            {(status.bankrollRegimeLabel || status.bankrollRegime || "—")
-              .toString()
-              .slice(0, 14)}
+          <span className="mt-0.5 text-sm font-bold leading-none text-center max-w-[7.5rem]">
+            {regimeChipLabel(status.bankrollRegimeLabel, status.bankrollRegime)}
           </span>
           {status.regimeOpenCap != null && (
             <span className="text-[9px] text-muted-foreground mt-0.5 font-mono">

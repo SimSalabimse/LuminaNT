@@ -215,25 +215,30 @@ export function deriveRiskStatus(
 
 /**
  * True when risk.json is pre-package / pre-Exploration export shape.
- * Requires capital_v2 ON, and any of:
+ *
+ * Always (any capital mode):
  *   - bankroll_regime id is legacy `calibration`
+ *
+ * When capital_v2 ON:
  *   - regime present but package `regime_weekly_explore_max` missing
- *   - progress present but package `exploration_exit` missing
- *     (e.g. only `calibration_exit` — never treat as Exploration 40)
+ *   - progress has legacy `calibration_exit` without package `exploration_exit`
+ *
+ * Progress chip still requires package `exploration_exit` (fail-closed display).
  * Never invents package numeric law in TS — only detects drift.
  */
 export function isStaleRiskSchema(
   risk: RiskState | Record<string, unknown> | undefined
 ): boolean {
   const r = (risk || {}) as Record<string, unknown>;
-  if (r.capital_v2_enabled !== true) return false;
-
   const regime =
     r.regime && typeof r.regime === "object"
       ? (r.regime as Record<string, unknown>)
       : null;
   const id = String(r.bankroll_regime ?? regime?.id ?? "").toLowerCase();
+  // Strongest pre-package signal — design A.4: independent of capital_v2 flag
   if (id === "calibration") return true;
+
+  if (r.capital_v2_enabled !== true) return false;
 
   const hasRegimeSignal = r.bankroll_regime != null || regime?.id != null;
   if (hasRegimeSignal && r.regime_weekly_explore_max === undefined) return true;
@@ -242,9 +247,29 @@ export function isStaleRiskSchema(
     regime?.progress && typeof regime.progress === "object"
       ? (regime.progress as Record<string, unknown>)
       : null;
-  if (progress != null && progress.exploration_exit == null) return true;
+  // Design: only flag when legacy calibration_exit is present without package exit
+  if (
+    progress != null &&
+    progress.calibration_exit != null &&
+    progress.exploration_exit == null
+  ) {
+    return true;
+  }
 
   return false;
+}
+
+/** Compact chip text for strip (full label stays in tooltip / bankrollRegimeLabel). */
+export function regimeChipLabel(
+  label: string | null | undefined,
+  id: string | null | undefined
+): string {
+  const full = String(label || id || "—");
+  const idLower = String(id || "").toLowerCase();
+  if (idLower === "calibration" || full === "Exploration (legacy)") {
+    return "Expl. (legacy)";
+  }
+  return full;
 }
 
 /** Fresh package progress for Exploration/Survival chip — never from calibration_exit. */

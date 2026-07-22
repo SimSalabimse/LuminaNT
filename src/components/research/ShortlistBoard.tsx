@@ -109,6 +109,7 @@ export function ShortlistBoard() {
       regimeProgressChip(snapshot?.risk, { stale: status.staleRiskSchema }),
     [snapshot?.risk, status.staleRiskSchema]
   );
+  const regimeIdLower = (status.bankrollRegime || "").toLowerCase();
 
   const activeSignals = useMemo(
     () => activeControlSignals(snapshot?.control_signals || []),
@@ -196,13 +197,11 @@ export function ShortlistBoard() {
           )}
           {status.bankrollRegime && (
             <Badge
-              variant={
-                status.bankrollRegime === "normal" ? "secondary" : "outline"
-              }
+              variant={regimeIdLower === "normal" ? "secondary" : "outline"}
               className={cn(
                 "h-8 px-3 font-mono",
-                (status.bankrollRegime === "exploration" ||
-                  status.bankrollRegime === "calibration") &&
+                (regimeIdLower === "exploration" ||
+                  regimeIdLower === "calibration") &&
                   "border-pending/40 text-pending"
               )}
               title={
