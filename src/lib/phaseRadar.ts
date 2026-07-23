@@ -145,6 +145,18 @@ export function activeControlSignals(
     for (const r of revokes) {
       const rTs = r.ts ? Date.parse(r.ts) : 0;
       if (rTs && sigTs && rTs < sigTs) continue;
+      // Kind-scoped revokes that do not target temp_gate_raise leave gates alone
+      const rKinds = revokeKindsOf(r);
+      const rSigKind = String(r.signal_kind || "").toLowerCase();
+      if (rKinds.length || rSigKind) {
+        const hitsGate =
+          rKinds.includes("temp_gate_raise") ||
+          rKinds.includes("*") ||
+          rSigKind === "temp_gate_raise" ||
+          rSigKind === "*";
+        if (!hitsGate) continue;
+        return false;
+      }
       if (r.revoke_all) return false;
       const rsp = (r.sport || "").toLowerCase();
       const rmk = (r.market || "").toLowerCase();
@@ -154,6 +166,115 @@ export function activeControlSignals(
     }
     return true;
   });
+}
+
+function revokeKindsOf(r: ControlSignal): string[] {
+  const raw = r.revoke_kinds;
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw.map((x) => String(x).toLowerCase());
+  return [String(raw).toLowerCase()];
+}
+
+/**
+ * Active temp_ev_relax ControlSignals (Mechanism B).
+ *
+ * Does **not** fold into `activeControlSignals` (temp_gate_raise only).
+ * Sport-only revokes do not clear temp_ev_relax (engine law) — require
+ * kind-scoped revoke / signal_kind / true revoke_all without sport pin.
+ */
+export function activeTempEvRelax(
+  signals: ControlSignal[] | undefined | null,
+  now = Date.now()
+): ControlSignal[] {
+  if (!signals?.length) return [];
+  const revokes = signals.filter((s) => s.kind === "revoke");
+  return signals.filter((s) => {
+    if (s.kind !== "temp_ev_relax") return false;
+    if (s.expires_at) {
+      const t = Date.parse(s.expires_at);
+      if (Number.isFinite(t) && t < now) return false;
+    }
+    // Need at least engine delta or line_keys to treat as real overlay
+    const delta = Number(s.delta_ev);
+    const keys = Array.isArray(s.line_keys) ? s.line_keys : [];
+    if (!(delta > 0) && keys.length === 0) return false;
+
+    const sigTs = s.ts ? Date.parse(s.ts) : 0;
+    for (const r of revokes) {
+      const rTs = r.ts ? Date.parse(r.ts) : 0;
+      if (rTs && sigTs && rTs < sigTs) continue;
+      const rKinds = revokeKindsOf(r);
+      const rSigKind = String(r.signal_kind || "").toLowerCase();
+      if (rKinds.includes("temp_ev_relax") || rKinds.includes("*")) return false;
+      if (rSigKind === "temp_ev_relax" || rSigKind === "*") return false;
+      // True global revoke_all without sport/market pin
+      if (r.revoke_all && !r.sport && !r.market && !rKinds.length && !rSigKind) {
+        return false;
+      }
+      // Sport-only revoke does not clear temp_ev_relax
+    }
+    return true;
+  });
+}
+
+/** Aggregated temp_ev_relax overlay fields for DeskStrip tooltip (engine values only). */
+export function tempEvRelaxOverlay(
+  signals: ControlSignal[] | undefined | null,
+  now = Date.now()
+): {
+  active: boolean;
+  delta_ev: number;
+  stake_mult: number;
+  expires_at: string | null;
+  line_keys_n: number;
+  n_signals: number;
+  sources: string[];
+} {
+  const active = activeTempEvRelax(signals, now);
+  if (!active.length) {
+    return {
+      active: false,
+      delta_ev: 0,
+      stake_mult: 1,
+      expires_at: null,
+      line_keys_n: 0,
+      n_signals: 0,
+      sources: [],
+    };
+  }
+  const keySet = new Set<string>();
+  let delta = 0;
+  let stakeMult = 1;
+  let expiresAt: string | null = null;
+  const sources: string[] = [];
+  for (const s of active) {
+    const d = Number(s.delta_ev);
+    if (Number.isFinite(d) && d > delta) delta = d;
+    const sm = Number(s.stake_mult);
+    if (Number.isFinite(sm) && sm > 0) {
+      stakeMult = stakeMult < 1 ? Math.min(stakeMult, sm) : sm;
+    }
+    for (const k of Array.isArray(s.line_keys) ? s.line_keys : []) {
+      if (k != null && String(k)) keySet.add(String(k));
+    }
+    const exp = s.expires_at ? String(s.expires_at) : null;
+    if (exp && (expiresAt == null || exp < expiresAt)) expiresAt = exp;
+    if (s.source) sources.push(String(s.source));
+  }
+  if (!(stakeMult < 1) && active.some((s) => s.stake_mult != null)) {
+    // keep tightest already applied
+  } else if (!(stakeMult < 1)) {
+    stakeMult = 1;
+  }
+  return {
+    active: delta > 0 || keySet.size > 0,
+    delta_ev: delta,
+    stake_mult: stakeMult,
+    expires_at: expiresAt,
+    line_keys_n: keySet.size,
+    n_signals: active.length,
+    sources: sources.slice(0, 4),
+  };
 }
 
 export function ttlLabel(expiresAt?: string | null, now = Date.now()): string {

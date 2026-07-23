@@ -23,6 +23,10 @@ import {
   weeklyExploreQuotaChip,
 } from "@/lib/riskStatus";
 import { phaseRadarDims, sizeModeWhy } from "@/lib/phaseRadar";
+import {
+  deskStripCoverageChips,
+  type DeskStripChip,
+} from "@/lib/emptySlip";
 
 /**
  * Capital strip — calm, scannable, mode-dominant.
@@ -126,6 +130,12 @@ export function DeskStrip() {
     status.sizeMode &&
     capitalMode !== status.sizeMode &&
     status.sizeMode !== "LEGACY";
+
+  // Progressive coverage chips (COV / CFLOOR / EV-RELAX) — engine fields only
+  const coverageChips = deskStripCoverageChips(
+    snapshot.coverage_health,
+    snapshot.control_signals || []
+  );
 
   // STALE RISK only on live desktop — demo keeps training data without forcing engine refresh
   const showStaleBanner = status.staleRiskSchema && !demo && isTauri();
@@ -358,6 +368,15 @@ export function DeskStrip() {
           </Badge>
         )}
 
+        {/* Coverage / floor / EV-relax progressive chips (engine SSOT only) */}
+        {coverageChips.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {coverageChips.map((chip) => (
+              <StripChipBadge key={chip.id} chip={chip} />
+            ))}
+          </div>
+        )}
+
         {/* Can bet — large, single source of truth */}
         <div
           className={cn(
@@ -573,6 +592,28 @@ export function DeskStrip() {
 
 function Divider() {
   return <div className="hidden sm:block h-8 w-px bg-white/[0.08] shrink-0" />;
+}
+
+function stripChipVariant(
+  tone: DeskStripChip["tone"]
+): "success" | "warning" | "loss" | "secondary" | "outline" {
+  if (tone === "ok") return "success";
+  if (tone === "warn") return "warning";
+  if (tone === "loss") return "loss";
+  if (tone === "neutral") return "secondary";
+  return "outline";
+}
+
+function StripChipBadge({ chip }: { chip: DeskStripChip }) {
+  return (
+    <Badge
+      variant={stripChipVariant(chip.tone)}
+      className="h-8 px-2.5 text-[10px] font-bold tracking-wide"
+      title={chip.title}
+    >
+      {chip.label}
+    </Badge>
+  );
 }
 
 function PrimaryMetric({

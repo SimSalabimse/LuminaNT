@@ -10,8 +10,16 @@
  * Loader: Tauri `load_snapshot` reads `data/state/coverage_health.json` into
  * `snapshot.coverage_health`. Missing/empty payload → `coverage_unavailable`
  * fail-closed (do not claim measured zero packs).
+ *
+ * Also: progressive DeskStrip chips (EV-RELAX / CFLOOR) — engine fields only.
  */
-import type { CoverageHealth, ViewId } from "@/types";
+import type {
+  ControlSignal,
+  CoverageFloorAudit,
+  CoverageHealth,
+  ViewId,
+} from "@/types";
+import { tempEvRelaxOverlay, ttlLabel } from "@/lib/phaseRadar";
 
 export type EmptySlipKind =
   | "has_picks"
@@ -221,4 +229,258 @@ export function emptySlipInputFromCoverage(
         : undefined,
     coverageLoaded: loaded,
   };
+}
+
+// ─── DeskStrip progressive chips (coverage floor + temp_ev_relax) ───────────
+
+export type DeskStripChip = {
+  id: string;
+  /** Short label on strip, e.g. EV-RELAX / CFLOOR */
+  label: string;
+  tone: "warn" | "loss" | "ok" | "neutral";
+  /** Full tooltip — engine fields only, no invented EV math */
+  title: string;
+};
+
+function asCoverage(
+  coverage: CoverageHealth | Record<string, unknown> | null | undefined
+): CoverageHealth {
+  if (coverage == null || typeof coverage !== "object") return {};
+  return coverage as CoverageHealth;
+}
+
+function floorAuditOf(c: CoverageHealth): CoverageFloorAudit | null {
+  const raw = c.coverage_floor;
+  if (raw != null && typeof raw === "object") return raw as CoverageFloorAudit;
+  return null;
+}
+
+function countOrNull(v: unknown): number | null {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return n;
+}
+
+/** Active force_coverage_priority ControlSignals (not expired). */
+export function activeForceCoverageSignals(
+  signals: ControlSignal[] | undefined | null,
+  now = Date.now()
+): ControlSignal[] {
+  if (!signals?.length) return [];
+  return signals.filter((s) => {
+    if (s.kind !== "force_coverage_priority") return false;
+    if (s.expires_at) {
+      const t = Date.parse(s.expires_at);
+      if (Number.isFinite(t) && t < now) return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * EV-RELAX strip chip from active temp_ev_relax ControlSignals.
+ * Progressive: null when inactive. Tooltip uses engine delta / stake_mult only.
+ */
+export function tempEvRelaxChip(
+  signals: ControlSignal[] | undefined | null,
+  now = Date.now()
+): DeskStripChip | null {
+  const ov = tempEvRelaxOverlay(signals, now);
+  if (!ov.active) return null;
+
+  const parts: string[] = ["temp_ev_relax active (engine)"];
+  if (ov.delta_ev > 0) {
+    parts.push(`ΔEV −${ov.delta_ev.toFixed(3)}`);
+  }
+  if (Number.isFinite(ov.stake_mult) && ov.stake_mult > 0) {
+    parts.push(`stake×${ov.stake_mult.toFixed(2)}`);
+  }
+  if (ov.expires_at) {
+    parts.push(`expires ${ov.expires_at}`);
+    parts.push(ttlLabel(ov.expires_at, now));
+  }
+  parts.push(`lines ${ov.line_keys_n}`);
+  if (ov.n_signals > 1) parts.push(`signals ${ov.n_signals}`);
+  if (ov.sources.length) parts.push(`source ${ov.sources[0]}`);
+
+  return {
+    id: "ev_relax",
+    label: "EV-RELAX",
+    tone: "warn",
+    title: parts.join(" · "),
+  };
+}
+
+/**
+ * CFLOOR strip chip from coverage_health audit + force_coverage + level pressure.
+ *
+ * Show when any of:
+ * - coverage_health.coverage_floor audit has activity (scaffolds / rotation / target)
+ * - force_coverage_active / force_coverage_signal
+ * - active force_coverage_priority ControlSignal
+ * - coverage level warn/critical (secondary pressure hint)
+ *
+ * Progressive disclosure only — never invents EV or pack counts.
+ */
+export function coverageFloorChip(
+  coverage: CoverageHealth | Record<string, unknown> | null | undefined,
+  signals?: ControlSignal[] | null,
+  now = Date.now()
+): DeskStripChip | null {
+  const c = asCoverage(coverage);
+  const loaded = isCoverageHealthLoaded(coverage);
+  const floor = floorAuditOf(c);
+  const level = normLevel(c.level);
+
+  const scaffoldN =
+    countOrNull(floor?.scaffold_tagged_n) ??
+    countOrNull((c as Record<string, unknown>).scaffold_tagged_n);
+  const rotN =
+    countOrNull(floor?.sport_rotation_tagged_n) ??
+    countOrNull((c as Record<string, unknown>).sport_rotation_tagged_n);
+  const targetN =
+    countOrNull(floor?.deep_target_n_effective) ??
+    countOrNull(c.deep_target_n_effective);
+
+  const hasFloorAudit =
+    floor != null ||
+    scaffoldN != null ||
+    rotN != null ||
+    targetN != null;
+  const floorActive =
+    (scaffoldN != null && scaffoldN > 0) ||
+    (rotN != null && rotN > 0) ||
+    (targetN != null && targetN > 0) ||
+    Boolean(floor?.enabled);
+
+  const forceActive = Boolean(c.force_coverage_active);
+  const forceSignal = c.force_coverage_signal;
+  const forceSignals = activeForceCoverageSignals(signals, now);
+  const forceFromSignals = forceSignals.length > 0;
+
+  const levelPressure = loaded && (level === "warn" || level === "critical");
+
+  // Need at least one real reason to show the chip
+  if (!floorActive && !forceActive && !forceFromSignals && !levelPressure) {
+    // coverage_floor blob present but empty counts — still surface when audit object exists with notes
+    if (!hasFloorAudit || floor == null) return null;
+    if (!Array.isArray(floor.notes) || floor.notes.length === 0) return null;
+  }
+
+  // If only "enabled: true" with zero tags and ok level and no force — stay quiet
+  if (
+    floorActive &&
+    !(scaffoldN != null && scaffoldN > 0) &&
+    !(rotN != null && rotN > 0) &&
+    !(targetN != null && targetN > 0) &&
+    !forceActive &&
+    !forceFromSignals &&
+    !levelPressure
+  ) {
+    // enabled flag alone is not enough pressure for strip noise
+    if (!(Array.isArray(floor?.notes) && floor!.notes!.length > 0)) return null;
+  }
+
+  const parts: string[] = ["Coverage floor"];
+  if (targetN != null && targetN > 0) {
+    parts.push(`deep_target_n_effective ${targetN}`);
+  }
+  if (scaffoldN != null && scaffoldN > 0) {
+    parts.push(`scaffold tags ${scaffoldN}`);
+  }
+  if (rotN != null && rotN > 0) {
+    parts.push(`sport rotation ${rotN}`);
+  }
+  if (forceActive || forceFromSignals) {
+    parts.push("force_coverage active");
+    if (forceSignal?.target_odds_band) {
+      parts.push(`band ${forceSignal.target_odds_band}`);
+    }
+    if (forceSignal?.expires_at) {
+      parts.push(`force exp ${forceSignal.expires_at}`);
+    } else if (forceSignals[0]?.expires_at) {
+      parts.push(`force exp ${forceSignals[0].expires_at}`);
+    }
+  }
+  if (levelPressure) {
+    parts.push(`coverage ${level}`);
+    if (c.empty_slip_risk) parts.push("empty_slip_risk");
+  }
+  if (Array.isArray(floor?.notes) && floor!.notes!.length > 0) {
+    parts.push(String(floor!.notes![0]));
+  }
+
+  const tone: DeskStripChip["tone"] =
+    level === "critical" || Boolean(c.empty_slip_risk)
+      ? "loss"
+      : level === "warn" || forceActive || forceFromSignals || floorActive
+        ? "warn"
+        : "neutral";
+
+  return {
+    id: "cfloor",
+    label: "CFLOOR",
+    tone,
+    title: parts.join(" · "),
+  };
+}
+
+/**
+ * Compact COV level chip for DeskStrip (when coverage loaded).
+ * Kept separate from CFLOOR so operators can scan level vs floor pressure.
+ */
+export function coverageStripChip(
+  coverage: CoverageHealth | Record<string, unknown> | null | undefined
+): DeskStripChip | null {
+  if (!isCoverageHealthLoaded(coverage)) return null;
+  const c = asCoverage(coverage);
+  const level = normLevel(c.level) || "—";
+  const deepPct = c.shortlist_deep_pct;
+  let deepLabel = "";
+  if (deepPct != null && Number.isFinite(Number(deepPct))) {
+    const n = Number(deepPct);
+    deepLabel =
+      n >= 0 && n <= 1 ? `${(n * 100).toFixed(0)}% deep` : `${n.toFixed(0)}% deep`;
+  }
+  const tone: DeskStripChip["tone"] =
+    level === "critical" || Boolean(c.empty_slip_risk)
+      ? "loss"
+      : level === "warn"
+        ? "warn"
+        : level === "ok"
+          ? "ok"
+          : "neutral";
+  const parts = [
+    `Coverage ${level}`,
+    deepLabel,
+    c.force_coverage_active ? "COV FORCE" : "",
+    c.empty_slip_risk ? "empty_slip_risk" : "",
+  ].filter(Boolean);
+  return {
+    id: "cov",
+    label:
+      level === "critical"
+        ? "COV CRIT"
+        : level === "warn"
+          ? "COV WARN"
+          : `COV ${level.toUpperCase()}`,
+    tone,
+    title: parts.join(" · "),
+  };
+}
+
+/** All progressive coverage-related strip chips (COV + CFLOOR + EV-RELAX). */
+export function deskStripCoverageChips(
+  coverage: CoverageHealth | Record<string, unknown> | null | undefined,
+  signals?: ControlSignal[] | null,
+  now = Date.now()
+): DeskStripChip[] {
+  const chips: DeskStripChip[] = [];
+  const cov = coverageStripChip(coverage);
+  if (cov) chips.push(cov);
+  const floor = coverageFloorChip(coverage, signals, now);
+  if (floor) chips.push(floor);
+  const relax = tempEvRelaxChip(signals, now);
+  if (relax) chips.push(relax);
+  return chips;
 }

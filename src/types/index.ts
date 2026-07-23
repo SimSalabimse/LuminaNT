@@ -177,12 +177,16 @@ export interface RiskState {
   [key: string]: unknown;
 }
 
-/** ControlSignals JSONL row (temp_gate_raise or revoke). */
+/**
+ * ControlSignals JSONL row.
+ * Kinds: temp_gate_raise | temp_ev_relax | force_coverage_priority | revoke | â€¦
+ */
 export interface ControlSignal {
   kind?: string;
   ts?: string;
   expires_at?: string;
   ttl_days?: number;
+  ttl_hours?: number;
   sport?: string;
   market?: string | null;
   min_ev_raise?: number;
@@ -191,8 +195,39 @@ export interface ControlSignal {
   bet_id?: string | null;
   process_root_cause?: string | null;
   revoke_all?: boolean;
+  /** Kind-scoped revoke list (e.g. ["temp_ev_relax"]). */
+  revoke_kinds?: string[] | string | null;
+  /** Target kind for revoke tombstone. */
+  signal_kind?: string | null;
   actor?: string;
   reason?: string;
+  /** Mechanism B: per-line min_EV soften amount (engine; never invent client-side). */
+  delta_ev?: number;
+  /** Mechanism B: stake multiplier while relax active (engine). */
+  stake_mult?: number;
+  /** Mechanism B: allowlisted line keys for temp_ev_relax. */
+  line_keys?: string[] | null;
+  signal_id?: string;
+  clear_on_settle?: boolean;
+  coverage_level?: string | null;
+  board_matches?: number | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Optional coverage_floor audit blob on coverage_health (engine PR3+).
+ * Progressive DeskStrip CFLOOR chip only â€” no client math.
+ */
+export interface CoverageFloorAudit {
+  enabled?: boolean;
+  scaffold_tagged_n?: number;
+  sport_rotation_tagged_n?: number;
+  deep_target_n_effective?: number;
+  board_lines?: number | null;
+  deep_queue_n?: number | null;
+  scaffold_pct?: number;
+  sport_rotation_min_lines?: number;
+  notes?: string[];
   [key: string]: unknown;
 }
 
@@ -232,6 +267,13 @@ export interface CoverageHealth {
     sources?: string[];
   } | null;
   soft_gate?: boolean;
+  /**
+   * Effective deep-queue target for this board (engine coverage floor).
+   * Optional â€” omit when not written; UI must not invent.
+   */
+  deep_target_n_effective?: number;
+  /** Coverage floor audit (scaffolds / sport rotation / knobs). Optional. */
+  coverage_floor?: CoverageFloorAudit | null;
   [key: string]: unknown;
 }
 
@@ -661,12 +703,12 @@ export interface AppSettings {
   aiModel: string;
   demoMode: boolean;
   /**
-   * D18 — Opt-in OS toast when coverage_health.level transitions to critical.
+   * D18 ï¿½ Opt-in OS toast when coverage_health.level transitions to critical.
    * Default off. Demo mode never fires.
    */
   notifyCoverageCritical?: boolean;
   /**
-   * D18 — Opt-in OS toast when risk schema becomes stale (pre-package export).
+   * D18 ï¿½ Opt-in OS toast when risk schema becomes stale (pre-package export).
    * Default off. Demo mode never fires.
    */
   notifyStaleRisk?: boolean;
