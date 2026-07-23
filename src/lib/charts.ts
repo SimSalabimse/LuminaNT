@@ -819,7 +819,8 @@ export function equityChartOption(
     animationDuration: 600,
     animationEasing: "cubicOut",
     backgroundColor: "transparent",
-    grid: { left: 56, right: showDd ? 44 : 20, top: 32, bottom: 48 },
+    // Extra top for legend; extra right for DD% ticks (legend no longer sits there)
+    grid: { left: 56, right: showDd ? 48 : 20, top: 44, bottom: 48 },
     tooltip: {
       trigger: "axis",
       ...tooltipBase,
@@ -867,6 +868,9 @@ export function equityChartOption(
             {
               type: "value" as const,
               name: "DD%",
+              // Name below axis top so it does not collide with legend
+              nameLocation: "middle" as const,
+              nameGap: 36,
               nameTextStyle: { color: chartText.muted, fontSize: 10 },
               min: 0,
               max: ddMax,
@@ -879,13 +883,18 @@ export function equityChartOption(
           ]
         : []),
     ],
+    // Legend centered under panel title area — never top-right (collides with Baseline + DD%)
     legend: {
       data: showDd ? ["Equity", "HWM", "DD %"] : ["Equity", "HWM"],
-      top: 0,
-      right: 8,
+      top: 2,
+      left: "center",
+      orient: "horizontal" as const,
+      itemGap: 16,
       textStyle: { color: chartText.muted, fontSize: 11 },
       itemWidth: 14,
       itemHeight: 2,
+      // Keep legend from overlapping plot or right axis
+      z: 10,
     },
     dataZoom: [
       { type: "inside", start: 0, end: 100 },
@@ -971,11 +980,16 @@ export function equityChartOption(
                 silent: true,
                 symbol: "none" as const,
                 label: {
+                  // Left side of plot — "insideEndTop" stacked under legend + DD%
                   formatter: "Baseline",
-                  color: chartText.label,
-                  fontSize: 11,
+                  color: chartText.muted,
+                  fontSize: 10,
                   fontWeight: 600 as const,
-                  position: "insideEndTop" as const,
+                  position: "insideStartTop" as const,
+                  distance: [6, 4],
+                  backgroundColor: "rgba(8,14,26,0.72)",
+                  padding: [2, 5],
+                  borderRadius: 3,
                 },
                 lineStyle: {
                   color: "rgba(168,182,202,0.45)",
