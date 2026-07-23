@@ -39,6 +39,8 @@ export type RiskStatus = {
   remaining: number;
   secure: number;
   unit: number;
+  /** Engine unit_size_source: phase_continuous | unit_ladder | null */
+  unitSource: string | null;
   dd: number | null;
   ddPctLabel: string;
   freezeManual: boolean;
@@ -46,7 +48,12 @@ export type RiskStatus = {
   weeklyRoom: number | null;
   openRoom: number | null;
   todayPl: number | null;
+  /** Display phase id (may be half-step e.g. 1A+) */
   phaseId: string;
+  /** Hard-gate parent when half-step; null when same as phaseId / missing */
+  phaseHardId: string | null;
+  /** 0–1 progress inside phase band from engine; null when absent */
+  progressInsidePhase: number | null;
   /**
    * Engine bankroll_regime id: exploration | survival | normal
    * (or legacy stale `calibration`).
@@ -81,6 +88,13 @@ export function deriveRiskStatus(
     Math.max(0, equity - openRisk);
   const remaining = num(r.remaining_risk_nok) ?? 0;
   const unit = num(r.unit_size_nok) ?? 10;
+  const unitSourceRaw =
+    r.unit_size_source != null
+      ? String(r.unit_size_source)
+      : p.unit_size_source != null
+        ? String(p.unit_size_source)
+        : null;
+  const unitSource = unitSourceRaw || null;
   const minStake = num(r.min_stake_nok) ?? 10;
 
   let sizeMode: SizeMode = "LEGACY";
@@ -197,6 +211,7 @@ export function deriveRiskStatus(
     remaining,
     secure,
     unit,
+    unitSource,
     dd,
     ddPctLabel: dd != null ? `${(dd * 100).toFixed(1)}%` : "—",
     freezeManual,
@@ -205,12 +220,37 @@ export function deriveRiskStatus(
     openRoom,
     todayPl,
     phaseId: String(p.phase_id || r.phase_id || "—"),
+    phaseHardId: resolvePhaseHardId(p, r),
+    progressInsidePhase: resolveProgressInsidePhase(p, r),
     bankrollRegime,
     bankrollRegimeLabel,
     regimeOpenCap,
     regimeMinEv,
     staleRiskSchema,
   };
+}
+
+/** Hard-gate parent from phase/risk; null when missing or equal to display id. */
+function resolvePhaseHardId(
+  p: Record<string, unknown>,
+  r: Record<string, unknown>
+): string | null {
+  const display = String(p.phase_id || r.phase_id || "").trim();
+  const hard = String(p.phase_hard_id || r.phase_hard_id || "").trim();
+  if (!hard) return null;
+  if (display && hard === display) return null;
+  return hard;
+}
+
+/** Engine progress_inside_phase (0–1); null when not emitted. */
+function resolveProgressInsidePhase(
+  p: Record<string, unknown>,
+  r: Record<string, unknown>
+): number | null {
+  const raw = p.progress_inside_phase ?? r.progress_inside_phase;
+  const n = num(raw);
+  if (n == null) return null;
+  return Math.max(0, Math.min(1, n));
 }
 
 /**
@@ -566,4 +606,221 @@ export function modeHeroClass(mode: SizeMode | string): string {
   if (m === "NORMAL")
     return "border-primary/35 bg-primary/12 text-primary shadow-[0_0_24px_-8px_hsl(var(--primary)/0.4)]";
   return "border-white/10 bg-white/5 text-muted-foreground";
+}
+
+// ── Hybrid phase progression + continuous unit + secure skim (PR-4) ─────
+
+/**
+ * Compact phase chip for DeskStrip / Plan — half-step ids (1A+) preserved.
+ * Engine fields only; never invent progress or hard gates.
+ */
+export type HybridPhaseChip = {
+  /** Display ladder id e.g. "1A+" */
+  phaseId: string;
+  /** Hard-gate parent when half-step e.g. "1A"; null when same / missing */
+  phaseHardId: string | null;
+  /** 0–1 when engine emitted progress_inside_phase */
+  progress: number | null;
+  /** 0–100 for bars; 0 when progress null */
+  progressPct: number;
+  /** Compact primary e.g. "1A+" or "1A+ · 27%" */
+  label: string;
+  /** Secondary line e.g. "gates 1A" when half-step */
+  hardGateLabel: string | null;
+  /** Tooltip / detail line */
+  detail: string;
+};
+
+/**
+ * Build hybrid phase chip from risk + phase (display phase_id, hard parent, progress).
+ */
+export function hybridPhaseChip(
+  risk?: RiskState | Record<string, unknown> | null,
+  phase?: PhaseState | Record<string, unknown> | null
+): HybridPhaseChip {
+  const r = (risk || {}) as Record<string, unknown>;
+  const p = (phase || {}) as Record<string, unknown>;
+  const phaseId = String(p.phase_id || r.phase_id || "—") || "—";
+  const hardRaw = String(p.phase_hard_id || r.phase_hard_id || "").trim();
+  const phaseHardId =
+    hardRaw && hardRaw !== phaseId && phaseId !== "—" ? hardRaw : null;
+  const progress = resolveProgressInsidePhase(p, r);
+  const progressPct =
+    progress != null ? Math.round(Math.max(0, Math.min(1, progress)) * 100) : 0;
+
+  let label = phaseId;
+  if (progress != null && phaseId !== "—") {
+    label = `${phaseId} · ${progressPct}%`;
+  }
+
+  const hardGateLabel = phaseHardId ? `gates ${phaseHardId}` : null;
+  const parts = [`Phase ${phaseId}`];
+  if (phaseHardId) parts.push(`hard gates from ${phaseHardId}`);
+  if (progress != null) {
+    parts.push(`progress ${(progress * 100).toFixed(1)}% inside band`);
+  }
+  const next = p.next != null ? String(p.next) : null;
+  if (next) parts.push(`next ${next}`);
+
+  return {
+    phaseId,
+    phaseHardId,
+    progress,
+    progressPct,
+    label,
+    hardGateLabel,
+    detail: parts.join(" · "),
+  };
+}
+
+/**
+ * Unit display: live unit_size_nok + continuous vs ladder note (engine only).
+ */
+export type UnitSizeChip = {
+  unit: number;
+  source: string | null;
+  continuous: number | null;
+  ladder: number | null;
+  /** Short hint for metric card e.g. "continuous" | "ladder" */
+  sourceHint: string;
+  /** Operator line when continuous and ladder differ */
+  note: string | null;
+};
+
+export function unitSizeChip(
+  risk?: RiskState | Record<string, unknown> | null,
+  phase?: PhaseState | Record<string, unknown> | null
+): UnitSizeChip {
+  const r = (risk || {}) as Record<string, unknown>;
+  const p = (phase || {}) as Record<string, unknown>;
+  const unit = num(r.unit_size_nok) ?? num(p.unit_size_nok) ?? 10;
+  const sourceRaw =
+    r.unit_size_source != null
+      ? String(r.unit_size_source)
+      : p.unit_size_source != null
+        ? String(p.unit_size_source)
+        : null;
+  const continuous = num(r.unit_size_continuous_nok);
+  const ladder = num(r.unit_size_ladder_nok);
+  const contOn =
+    r.phase_continuous_enabled === true ||
+    p.phase_continuous_enabled === true ||
+    sourceRaw === "phase_continuous";
+
+  let sourceHint = "unit";
+  if (sourceRaw === "phase_continuous" || (contOn && sourceRaw == null && continuous != null)) {
+    sourceHint = "continuous";
+  } else if (sourceRaw === "unit_ladder") {
+    sourceHint = "ladder";
+  } else if (sourceRaw) {
+    sourceHint = sourceRaw;
+  }
+
+  let note: string | null = null;
+  if (
+    continuous != null &&
+    ladder != null &&
+    Math.abs(continuous - ladder) > 0.05
+  ) {
+    note = `continuous ${Math.round(continuous)} · ladder ${Math.round(ladder)}`;
+  } else if (sourceHint === "continuous") {
+    note = "phase continuous (ladder fallback when off)";
+  } else if (sourceHint === "ladder") {
+    note = "liquid unit ladder";
+  }
+
+  return {
+    unit,
+    source: sourceRaw,
+    continuous,
+    ladder,
+    sourceHint,
+    note,
+  };
+}
+
+/**
+ * Secure bucket status from risk + capital_segments (Variant A tier on last transfer).
+ * Never invents skim amounts or tiers.
+ */
+export type SecureSkimStatus = {
+  secure: number;
+  /** Last transfer tier: soft | hard | legacy | null */
+  lastTier: string | null;
+  lastTransferNok: number | null;
+  lastTs: string | null;
+  /** Settled count at lock epoch (for auto-unlock countdown display) */
+  lockSettledCount: number | null;
+  /** Compact operator line */
+  label: string;
+  detail: string;
+};
+
+export function secureSkimStatus(
+  risk?: RiskState | Record<string, unknown> | null,
+  segments?: Record<string, unknown> | null
+): SecureSkimStatus {
+  const r = (risk || {}) as Record<string, unknown>;
+  const segs = (segments || {}) as Record<string, unknown>;
+  const secure =
+    num(r.secure_nok) ?? num(segs.secure_nok) ?? 0;
+
+  const transfers = Array.isArray(segs.secure_transfers)
+    ? (segs.secure_transfers as Record<string, unknown>[])
+    : [];
+  // Engine appends; last entry is most recent skim
+  const last =
+    transfers.length > 0 ? transfers[transfers.length - 1] : null;
+
+  let lastTier: string | null = null;
+  let lastTransferNok: number | null = null;
+  let lastTs: string | null = null;
+  if (last) {
+    if (last.tier != null && String(last.tier).trim()) {
+      lastTier = String(last.tier).toLowerCase();
+    }
+    lastTransferNok = num(last.transferred_nok);
+    lastTs = last.ts != null ? String(last.ts) : null;
+  }
+
+  const lockSettledCount = num(segs.secure_lock_settled_count);
+
+  const parts: string[] = [];
+  if (secure > 0.005) {
+    parts.push(`${Math.round(secure)} NOK secure`);
+  } else {
+    parts.push("Secure empty");
+  }
+  if (lastTier) {
+    parts.push(`last skim ${lastTier}`);
+    if (lastTransferNok != null) {
+      parts.push(`${Math.round(lastTransferNok)} NOK`);
+    }
+  }
+
+  const detailParts = [...parts];
+  if (lastTs) {
+    detailParts.push(lastTs.replace("T", " ").slice(0, 16));
+  }
+  if (lockSettledCount != null) {
+    detailParts.push(`lock epoch settled ${lockSettledCount}`);
+  }
+
+  return {
+    secure,
+    lastTier,
+    lastTransferNok,
+    lastTs,
+    lockSettledCount,
+    label: parts.join(" · "),
+    detail: detailParts.join(" · "),
+  };
+}
+
+/** Operator-facing unit source label for Plan metric hint. */
+export function unitSourceHint(source: string | null | undefined): string {
+  if (source === "phase_continuous") return "continuous";
+  if (source === "unit_ladder") return "ladder";
+  if (source) return source;
+  return "unit";
 }

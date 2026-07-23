@@ -30,9 +30,12 @@ import { ddProgress } from "@/lib/capital";
 import {
   deriveRiskStatus,
   gateBadgeVariant,
+  hybridPhaseChip,
   modeHeroClass,
   nextActionFor,
   regimeProgressChip,
+  secureSkimStatus,
+  unitSizeChip,
   weeklyExploreQuotaChip,
 } from "@/lib/riskStatus";
 import { phaseRadarDims, sizeModeWhy } from "@/lib/phaseRadar";
@@ -79,8 +82,9 @@ const ACTIVE_RULES: {
 }[] = [
   {
     icon: Scale,
-    title: "Unit ladder",
-    description: "Equity <1500 → 10 NOK · <2500 → 15 · else → 20",
+    title: "Unit sizing",
+    description:
+      "Continuous unit primary when phase_continuous on (~+1 NOK / 100 equity in band); liquid ladder 12/15/20 fallback",
   },
   {
     icon: TrendingDown,
@@ -104,8 +108,9 @@ const ACTIVE_RULES: {
   },
   {
     icon: Landmark,
-    title: "Secure buffer",
-    description: "40% of profit above ref×1.30 moves to non-risked secure",
+    title: "Secure Variant A",
+    description:
+      "Soft skim 15% above ref×1.25 · hard 30% above ref×1.50 (hard replaces soft) · liquid floor = phase daily_risk_ceil",
   },
   {
     icon: Shield,
@@ -139,6 +144,9 @@ export function CapitalPlanPanel() {
   const exploreQuotaChip = weeklyExploreQuotaChip(risk, {
     stale: status.staleRiskSchema,
   });
+  const phaseChip = hybridPhaseChip(risk, phase);
+  const unitChip = unitSizeChip(risk, phase);
+  const secureStatus = secureSkimStatus(risk, segs);
 
   const equity = status.equity;
   const secure = status.secure;
@@ -372,10 +380,20 @@ export function CapitalPlanPanel() {
         <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
           {[
             { label: "Equity", value: formatNokPlain(equity), hint: "ledger" },
-            { label: "Secure", value: formatNokPlain(secure), hint: "non-risked" },
+            {
+              label: "Secure",
+              value: formatNokPlain(secure),
+              hint: secureStatus.lastTier
+                ? `last skim ${secureStatus.lastTier}`
+                : "non-risked",
+            },
             { label: "Working", value: formatNokPlain(working), hint: "equity − secure" },
             { label: "Riskable liquid", value: formatNokPlain(status.liquid), hint: "− open" },
-            { label: "Unit", value: formatNokPlain(status.unit), hint: "ladder" },
+            {
+              label: "Unit",
+              value: formatNokPlain(unitChip.unit),
+              hint: unitChip.sourceHint,
+            },
             { label: "Remaining", value: formatNokPlain(status.remaining), hint: "new risk room" },
             {
               label: "Regime",
@@ -403,6 +421,115 @@ export function CapitalPlanPanel() {
               <div className="text-[11px] text-muted-foreground mt-0.5">{m.hint}</div>
             </div>
           ))}
+        </div>
+
+        {/* Hybrid phase progression + continuous unit + secure skim */}
+        <div className="mt-6 grid md:grid-cols-3 gap-4">
+          <div
+            className="rounded-xl border border-white/[0.08] bg-black/25 p-4 space-y-3"
+            title={phaseChip.detail}
+          >
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+              Phase progression
+            </div>
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="text-2xl font-bold font-mono tracking-tight">
+                {phaseChip.phaseId}
+              </span>
+              {phaseChip.hardGateLabel && (
+                <span className="text-[11px] text-muted-foreground font-mono">
+                  {phaseChip.hardGateLabel}
+                </span>
+              )}
+            </div>
+            {phase.label && (
+              <p className="text-[12px] text-muted-foreground">{String(phase.label)}</p>
+            )}
+            {phaseChip.progress != null ? (
+              <ProgressTrack
+                value={phaseChip.progressPct}
+                tone="gold"
+                label="Inside phase band"
+              />
+            ) : (
+              <p className="text-[12px] text-muted-foreground">
+                No progress_inside_phase from engine yet
+              </p>
+            )}
+            {phase.next != null && (
+              <p className="text-[11px] text-muted-foreground font-mono">
+                next {String(phase.next)}
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-white/[0.08] bg-black/25 p-4 space-y-2">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+              Unit sizing
+            </div>
+            <div className="text-2xl font-bold font-mono tabular-nums">
+              {formatNokPlain(unitChip.unit)}
+            </div>
+            <p className="text-[12px] text-muted-foreground leading-snug">
+              {unitChip.note ||
+                (unitChip.sourceHint === "continuous"
+                  ? "Continuous unit from phase band (engine)"
+                  : unitChip.sourceHint === "ladder"
+                    ? "Liquid unit ladder (engine)"
+                    : "Engine unit_size_nok")}
+            </p>
+            {(unitChip.continuous != null || unitChip.ladder != null) && (
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <RoomCell
+                  label="Continuous"
+                  value={
+                    unitChip.continuous != null
+                      ? formatNokPlain(unitChip.continuous)
+                      : "—"
+                  }
+                />
+                <RoomCell
+                  label="Ladder"
+                  value={
+                    unitChip.ladder != null
+                      ? formatNokPlain(unitChip.ladder)
+                      : "—"
+                  }
+                />
+              </div>
+            )}
+          </div>
+
+          <div
+            className="rounded-xl border border-white/[0.08] bg-black/25 p-4 space-y-2"
+            title={secureStatus.detail}
+          >
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+              Secure bucket
+            </div>
+            <div className="text-2xl font-bold font-mono tabular-nums">
+              {formatNokPlain(secureStatus.secure)}
+            </div>
+            <p className="text-[12px] text-muted-foreground leading-snug">
+              {secureStatus.lastTier
+                ? `Last skim tier: ${secureStatus.lastTier}${
+                    secureStatus.lastTransferNok != null
+                      ? ` · ${formatNokPlain(secureStatus.lastTransferNok)}`
+                      : ""
+                  }`
+                : "No secure skim yet (Variant A soft 1.25×/15% · hard 1.50×/30%)"}
+            </p>
+            {secureStatus.lastTs && (
+              <p className="text-[11px] font-mono text-muted-foreground">
+                {secureStatus.lastTs.replace("T", " ").slice(0, 16)}
+              </p>
+            )}
+            {secureStatus.lockSettledCount != null && (
+              <p className="text-[11px] text-muted-foreground">
+                Lock epoch settled count: {secureStatus.lockSettledCount}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* DD path + rooms — visual weight */}
@@ -723,8 +850,8 @@ export function CapitalPlanPanel() {
           <div className="rounded-xl border border-dashed border-white/[0.08] bg-black/20 px-6 py-10 text-center">
             <Percent className="h-6 w-6 text-muted-foreground/40 mx-auto mb-2" />
             <p className="text-sm text-muted-foreground">
-              No secure transfers yet. When working equity clears ref×1.30, 40% of surplus
-              moves to secure.
+              No secure transfers yet. Variant A: soft skim (15% above ref×1.25) or hard
+              (30% above ref×1.50) moves surplus to non-risked secure.
             </p>
           </div>
         ) : (
@@ -734,6 +861,9 @@ export function CapitalPlanPanel() {
                 <tr className="text-left text-muted-foreground border-b border-white/[0.06]">
                   <th className="py-2.5 pr-3 font-medium text-[11px] uppercase tracking-wider">
                     When
+                  </th>
+                  <th className="py-2.5 pr-3 font-medium text-[11px] uppercase tracking-wider">
+                    Tier
                   </th>
                   <th className="py-2.5 pr-3 font-medium text-[11px] uppercase tracking-wider">
                     Moved
@@ -754,6 +884,9 @@ export function CapitalPlanPanel() {
                   <tr key={i} className="border-b border-white/[0.04] font-mono text-xs">
                     <td className="py-2.5 pr-3 whitespace-nowrap opacity-80">
                       {String(t.ts || "").replace("T", " ").slice(0, 16)}
+                    </td>
+                    <td className="py-2.5 pr-3 text-muted-foreground">
+                      {t.tier != null ? String(t.tier) : "—"}
                     </td>
                     <td className="py-2.5 pr-3 text-primary font-semibold">
                       {formatNokPlain(Number(t.transferred_nok || 0))}

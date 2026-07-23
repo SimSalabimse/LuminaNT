@@ -17,9 +17,12 @@ import { isTauri } from "@/lib/tauri";
 import {
   deriveRiskStatus,
   gateBadgeVariant,
+  hybridPhaseChip,
   modeShellClass,
   regimeChipLabel,
   regimeProgressChip,
+  secureSkimStatus,
+  unitSizeChip,
   weeklyExploreQuotaChip,
 } from "@/lib/riskStatus";
 import { phaseRadarDims, sizeModeWhy } from "@/lib/phaseRadar";
@@ -135,6 +138,12 @@ export function DeskStrip() {
   const exploreQuotaChip = weeklyExploreQuotaChip(risk, {
     stale: status.staleRiskSchema,
   });
+  const phaseChip = hybridPhaseChip(risk, phase);
+  const unitChip = unitSizeChip(risk, phase);
+  const secureStatus = secureSkimStatus(
+    risk,
+    (snapshot.capital_segments || {}) as Record<string, unknown>
+  );
   const regimeId = (status.bankrollRegime || "").toLowerCase();
   // exploration + legacy calibration share amber shell; calibration also forces STALE banner
   const regimeShellExploration =
@@ -225,6 +234,37 @@ export function DeskStrip() {
         />
 
         <div className="flex-1 min-w-[12px]" />
+
+        {/* Hybrid phase — display id may be half-step (1A+); progress from engine */}
+        <div
+          className="flex flex-col items-center justify-center rounded-xl border border-primary/25 bg-primary/8 px-3 py-2 min-w-[88px]"
+          title={phaseChip.detail}
+        >
+          <span className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
+            Phase
+          </span>
+          <span className="mt-0.5 text-sm font-bold font-mono leading-none">
+            {phaseChip.phaseId}
+          </span>
+          {phaseChip.hardGateLabel && (
+            <span className="text-[9px] text-muted-foreground mt-0.5 font-mono">
+              {phaseChip.hardGateLabel}
+            </span>
+          )}
+          {phaseChip.progress != null && (
+            <>
+              <div className="mt-1 h-1 w-full max-w-[64px] rounded-full bg-black/40 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary/80"
+                  style={{ width: `${phaseChip.progressPct}%` }}
+                />
+              </div>
+              <span className="text-[9px] text-muted-foreground mt-0.5 font-mono">
+                {phaseChip.progressPct}%
+              </span>
+            </>
+          )}
+        </div>
 
         {/* Bankroll regime — Exploration / Survival / Normal (+ legacy calibration + STALE) */}
         <div
@@ -424,7 +464,16 @@ export function DeskStrip() {
       {secondaryOpen && (
         <div className="px-4 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] border-t border-white/[0.05] bg-black/30">
           <Sec label="Remaining" value={formatNokPlain(status.remaining)} />
-          <Sec label="Unit" value={formatNokPlain(status.unit)} />
+          <Sec
+            label={
+              unitChip.sourceHint === "continuous"
+                ? "Unit (cont.)"
+                : unitChip.sourceHint === "ladder"
+                  ? "Unit (ladder)"
+                  : "Unit"
+            }
+            value={formatNokPlain(unitChip.unit)}
+          />
           {status.openRoom != null && (
             <Sec label="Open room" value={formatNokPlain(status.openRoom)} />
           )}
@@ -434,8 +483,15 @@ export function DeskStrip() {
           {status.weeklyRoom != null && (
             <Sec label="Week room" value={formatNokPlain(status.weeklyRoom)} />
           )}
-          {status.secure > 0 && (
-            <Sec label="Secure" value={formatNokPlain(status.secure)} />
+          {(status.secure > 0 || secureStatus.lastTier) && (
+            <Sec
+              label="Secure"
+              value={
+                secureStatus.lastTier
+                  ? `${formatNokPlain(secureStatus.secure)} · ${secureStatus.lastTier}`
+                  : formatNokPlain(secureStatus.secure)
+              }
+            />
           )}
           {status.todayPl != null && (
             <Sec
@@ -455,7 +511,17 @@ export function DeskStrip() {
             value={`${(util * 100).toFixed(0)}%`}
             tone={util >= 0.95 ? "loss" : util >= 0.8 ? "pending" : undefined}
           />
-          <Sec label="Phase" value={String(phase.phase_id ?? "—")} />
+          <Sec
+            label="Phase"
+            value={
+              phaseChip.progress != null
+                ? phaseChip.label
+                : phaseChip.phaseId
+            }
+          />
+          {phaseChip.hardGateLabel && (
+            <Sec label="Hard gates" value={phaseChip.phaseHardId || "—"} />
+          )}
           {status.bankrollRegime && (
             <Sec
               label="Regime"
