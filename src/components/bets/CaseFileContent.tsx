@@ -210,15 +210,31 @@ export function CaseFileContent({ bet }: { bet: Bet }) {
       "none";
     const linkConf = link?.confidence as number | undefined;
     const sportLearn = snapshot?.learning?.sports?.[bet.sport || ""];
-    const processLabel =
+    const chainGrade = reasoningChain
+      ? String(reasoningChain.grade || "").trim().toUpperCase()
+      : "";
+    const ledgerGrade = String(bet.research_grade || "").trim().toUpperCase();
+    const gradeForLabel = chainGrade || ledgerGrade;
+    const chainKind = reasoningChain
+      ? String(reasoningChain.kind || "").trim()
+      : "";
+    // Prefer chain grade + raw kind before falling to "Unknown process"
+    let processLabel = "Unknown process";
+    if (reasoningChain && (gradeForLabel || chainKind)) {
+      const parts = ["Chain"];
+      if (gradeForLabel) parts.push(`Grade ${gradeForLabel}`);
+      if (chainKind) parts.push(chainKind);
+      processLabel = parts.join(" · ");
+    } else if (
       p_model != null &&
-      ["A", "B"].includes((bet.research_grade || "").toUpperCase())
-        ? "Solid / partial process"
-        : ev != null
-          ? "Recovered / thin meta"
-          : bet.source === "era_archive"
-            ? "Archive era"
-            : "Unknown process";
+      ["A", "B"].includes(ledgerGrade)
+    ) {
+      processLabel = "Solid / partial process";
+    } else if (ev != null) {
+      processLabel = "Recovered / thin meta";
+    } else if (bet.source === "era_archive") {
+      processLabel = "Archive era";
+    }
     return {
       dec,
       p_model,
@@ -237,7 +253,7 @@ export function CaseFileContent({ bet }: { bet: Bet }) {
         bet.market_family ||
         marketFamilyLabel(bet.market_type),
     };
-  }, [bet, snapshot]);
+  }, [bet, snapshot, reasoningChain]);
 
   useEffect(() => {
     if (!dossier.evidenceFile) {
@@ -316,7 +332,13 @@ export function CaseFileContent({ bet }: { bet: Bet }) {
       </div>
 
       <Section title="0 · Reasoning (Simple Mode)">
-        <SimpleModeCard chain={reasoningChain} simpleMode={simpleMode} />
+        <SimpleModeCard
+          chain={reasoningChain}
+          simpleMode={simpleMode}
+          fallbackGrade={bet.research_grade}
+          activeSignals={activeControlSignals(snapshot?.control_signals || [])}
+          emphasis="primary"
+        />
       </Section>
 
       <Section title="1 · Ledger">
