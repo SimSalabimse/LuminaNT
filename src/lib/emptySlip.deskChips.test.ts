@@ -10,7 +10,11 @@ import {
   deskStripCoverageChips,
   tempEvRelaxChip,
 } from "./emptySlip";
-import { activeTempEvRelax, tempEvRelaxOverlay } from "./phaseRadar";
+import {
+  activeControlSignals,
+  activeTempEvRelax,
+  tempEvRelaxOverlay,
+} from "./phaseRadar";
 
 const NOW = Date.parse("2026-07-23T12:00:00Z");
 const FUTURE = "2026-07-24T12:00:00Z";
@@ -99,6 +103,7 @@ describe("tempEvRelaxChip / overlay", () => {
   it("returns null when inactive", () => {
     expect(tempEvRelaxChip([], NOW)).toBeNull();
     expect(tempEvRelaxOverlay([], NOW).active).toBe(false);
+    expect(tempEvRelaxOverlay([], NOW).stake_mult).toBeNull();
   });
 
   it("surfaces delta, stake, expires, line count in tooltip", () => {
@@ -122,6 +127,135 @@ describe("tempEvRelaxChip / overlay", () => {
     expect(chip!.title).toContain(FUTURE);
     expect(chip!.title).toContain("lines 3");
     expect(chip!.title).toContain("coverage_floor_empty_queue");
+    expect(tempEvRelaxOverlay(signals, NOW).stake_mult).toBe(0.8);
+  });
+
+  it("omits stake× when engine did not stamp stake_mult (no invented 1.00)", () => {
+    const signals: ControlSignal[] = [
+      {
+        kind: "temp_ev_relax",
+        ts: "2026-07-23T10:00:00Z",
+        expires_at: FUTURE,
+        delta_ev: 0.015,
+        line_keys: ["only-delta"],
+        source: "empty_deep_queue",
+      },
+    ];
+    const ov = tempEvRelaxOverlay(signals, NOW);
+    expect(ov.active).toBe(true);
+    expect(ov.stake_mult).toBeNull();
+    const chip = tempEvRelaxChip(signals, NOW);
+    expect(chip).not.toBeNull();
+    expect(chip!.title).toContain("ΔEV −0.015");
+    expect(chip!.title).not.toMatch(/stake×/);
+    expect(chip!.title).not.toContain("1.00");
+  });
+});
+
+describe("activeControlSignals (temp_gate_raise only + revoke hygiene)", () => {
+  const gate: ControlSignal = {
+    kind: "temp_gate_raise",
+    ts: "2026-07-23T10:00:00Z",
+    expires_at: FUTURE,
+    sport: "football",
+    market: "1x2",
+    min_ev_raise: 0.02,
+  };
+
+  it("returns only temp_gate_raise (never temp_ev_relax / force)", () => {
+    const signals: ControlSignal[] = [
+      gate,
+      {
+        kind: "temp_ev_relax",
+        ts: "2026-07-23T10:00:00Z",
+        expires_at: FUTURE,
+        delta_ev: 0.01,
+        line_keys: ["a"],
+      },
+      {
+        kind: "force_coverage_priority",
+        ts: "2026-07-23T10:00:00Z",
+        expires_at: FUTURE,
+        sport: "coverage",
+      },
+    ];
+    const active = activeControlSignals(signals, NOW);
+    expect(active).toHaveLength(1);
+    expect(active.every((s) => s.kind === "temp_gate_raise")).toBe(true);
+  });
+
+  it("revoke_kinds temp_ev_relax does not drop gates", () => {
+    const signals: ControlSignal[] = [
+      gate,
+      {
+        kind: "revoke",
+        ts: "2026-07-23T11:00:00Z",
+        revoke_kinds: ["temp_ev_relax"],
+      },
+    ];
+    expect(activeControlSignals(signals, NOW)).toHaveLength(1);
+  });
+
+  it("revoke_kinds temp_gate_raise drops gates", () => {
+    const signals: ControlSignal[] = [
+      gate,
+      {
+        kind: "revoke",
+        ts: "2026-07-23T11:00:00Z",
+        revoke_kinds: ["temp_gate_raise"],
+      },
+    ];
+    expect(activeControlSignals(signals, NOW)).toEqual([]);
+  });
+
+  it("signal_kind temp_ev_relax does not drop gates; signal_kind temp_gate_raise does", () => {
+    expect(
+      activeControlSignals(
+        [
+          gate,
+          {
+            kind: "revoke",
+            ts: "2026-07-23T11:00:00Z",
+            signal_kind: "temp_ev_relax",
+          },
+        ],
+        NOW
+      )
+    ).toHaveLength(1);
+    expect(
+      activeControlSignals(
+        [
+          gate,
+          {
+            kind: "revoke",
+            ts: "2026-07-23T11:00:00Z",
+            signal_kind: "temp_gate_raise",
+          },
+        ],
+        NOW
+      )
+    ).toEqual([]);
+  });
+
+  it("sport-only revoke still drops matching gate", () => {
+    const signals: ControlSignal[] = [
+      gate,
+      {
+        kind: "temp_gate_raise",
+        ts: "2026-07-23T10:00:00Z",
+        expires_at: FUTURE,
+        sport: "tennis",
+        min_ev_raise: 0.01,
+      },
+      {
+        kind: "revoke",
+        ts: "2026-07-23T11:00:00Z",
+        sport: "football",
+      },
+    ];
+    const active = activeControlSignals(signals, NOW);
+    expect(active).toHaveLength(1);
+    expect(active[0].sport).toBe("tennis");
   });
 });
 
@@ -283,5 +417,91 @@ describe("coverageStripChip + deskStripCoverageChips", () => {
       { kind: "force_coverage_priority", expires_at: FUTURE },
     ];
     expect(activeForceCoverageSignals(signals, NOW)).toHaveLength(1);
+  });
+
+  it("activeForceCoverageSignals honors kind-scoped and global revokes", () => {
+    const live: ControlSignal = {
+      kind: "force_coverage_priority",
+      ts: "2026-07-23T10:00:00Z",
+      expires_at: FUTURE,
+      sport: "coverage",
+    };
+    expect(
+      activeForceCoverageSignals(
+        [
+          live,
+          {
+            kind: "revoke",
+            ts: "2026-07-23T11:00:00Z",
+            revoke_kinds: ["force_coverage_priority"],
+          },
+        ],
+        NOW
+      )
+    ).toEqual([]);
+    expect(
+      activeForceCoverageSignals(
+        [
+          live,
+          {
+            kind: "revoke",
+            ts: "2026-07-23T11:00:00Z",
+            signal_kind: "force_coverage_priority",
+          },
+        ],
+        NOW
+      )
+    ).toEqual([]);
+    expect(
+      activeForceCoverageSignals(
+        [
+          live,
+          {
+            kind: "revoke",
+            ts: "2026-07-23T11:00:00Z",
+            revoke_all: true,
+          },
+        ],
+        NOW
+      )
+    ).toEqual([]);
+    // temp_ev_relax kind revoke must not clear force coverage
+    expect(
+      activeForceCoverageSignals(
+        [
+          live,
+          {
+            kind: "revoke",
+            ts: "2026-07-23T11:00:00Z",
+            revoke_kinds: ["temp_ev_relax"],
+          },
+        ],
+        NOW
+      )
+    ).toHaveLength(1);
+  });
+
+  it("CFLOOR drops force-from-signal after force_coverage_priority revoke", () => {
+    const signals: ControlSignal[] = [
+      {
+        kind: "force_coverage_priority",
+        ts: "2026-07-23T10:00:00Z",
+        expires_at: FUTURE,
+        sport: "coverage",
+      },
+      {
+        kind: "revoke",
+        ts: "2026-07-23T11:00:00Z",
+        revoke_kinds: ["force_coverage_priority"],
+      },
+    ];
+    // ok level, no floor audit, force only via signal → quiet after revoke
+    expect(
+      coverageFloorChip(
+        { level: "ok", shortlist_n: 1, updated_at: "2026-07-23" },
+        signals,
+        NOW
+      )
+    ).toBeNull();
   });
 });

@@ -217,14 +217,20 @@ export function activeTempEvRelax(
   });
 }
 
-/** Aggregated temp_ev_relax overlay fields for DeskStrip tooltip (engine values only). */
+/**
+ * Aggregated temp_ev_relax overlay for DeskStrip tooltip (engine values only).
+ *
+ * `stake_mult` is **null** when no active signal emitted a finite stake_mult —
+ * never invent identity 1.0 for the tooltip.
+ */
 export function tempEvRelaxOverlay(
   signals: ControlSignal[] | undefined | null,
   now = Date.now()
 ): {
   active: boolean;
   delta_ev: number;
-  stake_mult: number;
+  /** Tightest engine stake_mult among active signals; null if none stamped. */
+  stake_mult: number | null;
   expires_at: string | null;
   line_keys_n: number;
   n_signals: number;
@@ -235,7 +241,7 @@ export function tempEvRelaxOverlay(
     return {
       active: false,
       delta_ev: 0,
-      stake_mult: 1,
+      stake_mult: null,
       expires_at: null,
       line_keys_n: 0,
       n_signals: 0,
@@ -244,15 +250,18 @@ export function tempEvRelaxOverlay(
   }
   const keySet = new Set<string>();
   let delta = 0;
-  let stakeMult = 1;
+  let stakeMult: number | null = null;
   let expiresAt: string | null = null;
   const sources: string[] = [];
   for (const s of active) {
     const d = Number(s.delta_ev);
     if (Number.isFinite(d) && d > delta) delta = d;
-    const sm = Number(s.stake_mult);
-    if (Number.isFinite(sm) && sm > 0) {
-      stakeMult = stakeMult < 1 ? Math.min(stakeMult, sm) : sm;
+    // Only restate stake_mult when the engine stamped a finite value
+    if (s.stake_mult != null) {
+      const sm = Number(s.stake_mult);
+      if (Number.isFinite(sm) && sm > 0) {
+        stakeMult = stakeMult == null ? sm : Math.min(stakeMult, sm);
+      }
     }
     for (const k of Array.isArray(s.line_keys) ? s.line_keys : []) {
       if (k != null && String(k)) keySet.add(String(k));
@@ -260,11 +269,6 @@ export function tempEvRelaxOverlay(
     const exp = s.expires_at ? String(s.expires_at) : null;
     if (exp && (expiresAt == null || exp < expiresAt)) expiresAt = exp;
     if (s.source) sources.push(String(s.source));
-  }
-  if (!(stakeMult < 1) && active.some((s) => s.stake_mult != null)) {
-    // keep tightest already applied
-  } else if (!(stakeMult < 1)) {
-    stakeMult = 1;
   }
   return {
     active: delta > 0 || keySet.size > 0,

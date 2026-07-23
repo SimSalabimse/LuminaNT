@@ -261,17 +261,55 @@ function countOrNull(v: unknown): number | null {
   return n;
 }
 
-/** Active force_coverage_priority ControlSignals (not expired). */
+function revokeKindsList(r: ControlSignal): string[] {
+  const raw = r.revoke_kinds;
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw.map((x) => String(x).toLowerCase());
+  return [String(raw).toLowerCase()];
+}
+
+/**
+ * Active force_coverage_priority ControlSignals (not expired, not revoked).
+ * Mirrors kind-scoped + global revoke hygiene used by temp_gate / temp_ev_relax.
+ */
 export function activeForceCoverageSignals(
   signals: ControlSignal[] | undefined | null,
   now = Date.now()
 ): ControlSignal[] {
   if (!signals?.length) return [];
+  const revokes = signals.filter((s) => s.kind === "revoke");
   return signals.filter((s) => {
     if (s.kind !== "force_coverage_priority") return false;
     if (s.expires_at) {
       const t = Date.parse(s.expires_at);
       if (Number.isFinite(t) && t < now) return false;
+    }
+    const sigTs = s.ts ? Date.parse(s.ts) : 0;
+    const sp = (s.sport || "").toLowerCase();
+    for (const r of revokes) {
+      const rTs = r.ts ? Date.parse(r.ts) : 0;
+      if (rTs && sigTs && rTs < sigTs) continue;
+      const rKinds = revokeKindsList(r);
+      const rSigKind = String(r.signal_kind || "").toLowerCase();
+      if (
+        rKinds.includes("force_coverage_priority") ||
+        rKinds.includes("*") ||
+        rSigKind === "force_coverage_priority" ||
+        rSigKind === "*"
+      ) {
+        return false;
+      }
+      // Global revoke_all without sport pin
+      if (r.revoke_all && !r.sport && !r.market && !rKinds.length && !rSigKind) {
+        return false;
+      }
+      // Sport-scoped revoke (including revoke_all + sport)
+      if (!rKinds.length && !rSigKind) {
+        const rsp = (r.sport || "").toLowerCase();
+        if (r.revoke_all && !rsp) return false;
+        if (rsp && sp && rsp === sp) return false;
+        if (rsp && !sp && r.revoke_all) return false;
+      }
     }
     return true;
   });
@@ -280,6 +318,7 @@ export function activeForceCoverageSignals(
 /**
  * EV-RELAX strip chip from active temp_ev_relax ControlSignals.
  * Progressive: null when inactive. Tooltip uses engine delta / stake_mult only.
+ * Omits stake× when the engine did not stamp stake_mult (no invented 1.00).
  */
 export function tempEvRelaxChip(
   signals: ControlSignal[] | undefined | null,
@@ -292,7 +331,7 @@ export function tempEvRelaxChip(
   if (ov.delta_ev > 0) {
     parts.push(`ΔEV −${ov.delta_ev.toFixed(3)}`);
   }
-  if (Number.isFinite(ov.stake_mult) && ov.stake_mult > 0) {
+  if (ov.stake_mult != null && Number.isFinite(ov.stake_mult) && ov.stake_mult > 0) {
     parts.push(`stake×${ov.stake_mult.toFixed(2)}`);
   }
   if (ov.expires_at) {
