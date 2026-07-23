@@ -202,7 +202,7 @@ export function Settings() {
         </h2>
         <p className="text-xs text-muted-foreground leading-relaxed">
           Opt-in short system toasts when the desk may be backgrounded. No bet
-          details — only coverage critical / stale risk schema. Off by default;
+          details ï¿½ only coverage critical / stale risk schema. Off by default;
           silent in demo mode. Uses the browser Notification API (WebView2 /
           desktop webview); grant permission when enabling.
         </p>
@@ -302,7 +302,18 @@ export function Settings() {
       </section>
 
       <section className="glass rounded-xl p-5 space-y-2 text-sm text-muted-foreground">
-        <h2 className="text-sm font-semibold text-foreground">About phases & risk</h2>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="text-sm font-semibold text-foreground">About phases & risk</h2>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={() => useAppStore.getState().setHelpOpen(true)}
+          >
+            Desk flow help (?)
+          </Button>
+        </div>
         <p>
           <strong className="text-foreground">Equity</strong> = baseline + sum(settled P/L in{" "}
           <code>data/bets.csv</code>).

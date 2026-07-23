@@ -83,6 +83,11 @@ export interface PhaseStateScores {
 
 export interface PhaseState {
   phase_id?: string;
+  /**
+   * Hard-gate parent when display phase is a half-step (e.g. phase_id "1A+" → hard "1A").
+   * Engine hybrid progression (PR-2).
+   */
+  phase_hard_id?: string;
   label?: string;
   stake_min?: number;
   stake_max?: number;
@@ -100,6 +105,14 @@ export interface PhaseState {
   reasons?: string[];
   equity_nok?: number;
   settled_count?: number;
+  /** 0 at phase enter → ~1 at next-phase enter (engine continuous progression). */
+  progress_inside_phase?: number | null;
+  /** True when phase_continuous.enabled on the engine. */
+  phase_continuous_enabled?: boolean;
+  /** Continuous unit when phase_continuous on; else unset / ladder elsewhere. */
+  unit_size_nok?: number;
+  /** "phase_continuous" | "unit_ladder" | other engine tag */
+  unit_size_source?: string | null;
   phase_model?: string;
   phase_state?: PhaseStateScores;
   size_mode_floor?: string | null;
@@ -140,8 +153,14 @@ export interface RiskState {
   date?: string;
   equity_nok?: number;
   phase_id?: string;
+  /** Hard-gate parent for half-steps (engine hybrid). */
+  phase_hard_id?: string;
+  /** 0–1 progress inside current phase band (engine). */
+  progress_inside_phase?: number | null;
   daily_risk_cap_nok?: number;
   daily_risk_pct?: number;
+  daily_risk_floor?: number;
+  daily_risk_ceil?: number;
   open_pending_risk_nok?: number;
   remaining_risk_nok?: number;
   today_realized_pl_nok?: number;
@@ -156,6 +175,23 @@ export interface RiskState {
   research_only?: boolean;
   high_odds_stress_block?: boolean;
   phase_health?: Record<string, unknown>;
+  /** Secure bucket balance (non-risked). */
+  secure_nok?: number;
+  working_equity_nok?: number;
+  riskable_liquid_nok?: number;
+  /**
+   * Live unit size — continuous primary when phase_continuous enabled,
+   * else liquid unit ladder. Never invent in UI.
+   */
+  unit_size_nok?: number;
+  /** "phase_continuous" | "unit_ladder" */
+  unit_size_source?: string | null;
+  /** Diagnostics: ladder unit even when continuous is live. */
+  unit_size_ladder_nok?: number | null;
+  /** Diagnostics: continuous unit when enabled. */
+  unit_size_continuous_nok?: number | null;
+  unit_size_sod_nok?: number;
+  phase_continuous_enabled?: boolean;
   /**
    * Early-bankroll regime id from engine (nt/bankroll_regime).
    * Package law: Exploration → Survival → Normal.
@@ -177,7 +213,10 @@ export interface RiskState {
   [key: string]: unknown;
 }
 
-/** ControlSignals JSONL row (temp_gate_raise or revoke). */
+/**
+ * ControlSignals JSONL row.
+ * Kinds include temp_gate_raise, temp_ev_relax (EV-RELAX), revoke.
+ */
 export interface ControlSignal {
   kind?: string;
   ts?: string;
@@ -186,6 +225,10 @@ export interface ControlSignal {
   sport?: string;
   market?: string | null;
   min_ev_raise?: number;
+  /** temp_ev_relax: soft delta on min_EV (e.g. 0.01–0.02). */
+  delta_ev?: number | null;
+  /** temp_ev_relax: stake mult while active (often 0.80). */
+  stake_mult?: number | null;
   force_confirmed_lineup?: boolean;
   source?: string;
   bet_id?: string | null;
@@ -196,14 +239,43 @@ export interface ControlSignal {
   [key: string]: unknown;
 }
 
+/**
+ * Settlement review / PostSettlementPacket fields.
+ * Taxonomy: predictability × variance_class → learning_weight (engine).
+ */
 export interface SettlementReview {
   bet_id?: string;
   ts?: string;
+  /** How knowable outcome was at research time. */
+  predictability?: string;
   variance_class?: string;
+  /** clamp(base[variance] × pred_mult[predictability], 0, 1) from engine. */
+  learning_weight?: number | null;
   research_quality_retro?: string;
   process_root_cause?: string;
   score?: string;
   factors?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/**
+ * Engine-authored ReasoningChain row (`data/state/reasoning_chains.jsonl`).
+ * Optional until full RC loader; clients must tolerate missing / partial.
+ */
+export interface ReasoningChain {
+  reasoning_chain_id?: string;
+  bet_id?: string | null;
+  match?: string;
+  selection?: string;
+  decimal_odds?: number;
+  /** Simple Mode traffic light / summary when present. */
+  traffic_light?: string | null;
+  summary?: string | null;
+  steps?: Array<Record<string, unknown>>;
+  decision?: string | null;
+  p_model?: number | null;
+  ev?: number | null;
+  stake_nok?: number | null;
   [key: string]: unknown;
 }
 
@@ -330,6 +402,8 @@ export interface DecisionRecord {
   implied_prob?: number;
   backfill?: boolean;
   recovered_from_notes?: boolean;
+  /** Join to reasoning_chains.jsonl when engine emits chain ids. */
+  reasoning_chain_id?: string | null;
   [key: string]: unknown;
 }
 
@@ -454,6 +528,11 @@ export interface TrackerSnapshot {
    * Missing file → empty object from loader; panels must null-safe (no invented %).
    */
   deep_queue?: DeepQueueState | Record<string, unknown> | null;
+  /**
+   * Reasoning chains SSOT (`data/state/reasoning_chains.jsonl`).
+   * Optional — tolerate missing until Tauri/demo loader wires the file.
+   */
+  reasoning_chains?: ReasoningChain[] | null;
 }
 
 export interface LearningBucket {
@@ -661,12 +740,12 @@ export interface AppSettings {
   aiModel: string;
   demoMode: boolean;
   /**
-   * D18 � Opt-in OS toast when coverage_health.level transitions to critical.
+   * D18 � Opt-in OS toast when coverage_health.level transitions to critical.
    * Default off. Demo mode never fires.
    */
   notifyCoverageCritical?: boolean;
   /**
-   * D18 � Opt-in OS toast when risk schema becomes stale (pre-package export).
+   * D18 � Opt-in OS toast when risk schema becomes stale (pre-package export).
    * Default off. Demo mode never fires.
    */
   notifyStaleRisk?: boolean;
