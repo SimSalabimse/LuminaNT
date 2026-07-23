@@ -2,7 +2,8 @@
 
 Last updated: 2026-07-22 (**capital_v2 LIVE** · bankroll regime Exploration → Survival → Normal · PR1–PR5 shipped)
 
-**Deferred work** (weekly explore chip, coverage panel, day-start card, place-ack on Shortlist, security harden, settlement-day drill, OS notifications, composition bars): see [`docs/DESIGN_PR6_13_REMAINING.md`](./DESIGN_PR6_13_REMAINING.md).  
+**Deferred work** (weekly explore chip, coverage panel, place-ack on Shortlist, security harden, settlement-day drill, OS notifications, composition bars): see [`docs/DESIGN_PR6_13_REMAINING.md`](./DESIGN_PR6_13_REMAINING.md).  
+**Day-start process checklist card:** **removed** from Desk UI — superseded by Grok `/daily-run` agent skill (settle → odds → board → recommend → place). Desk is monitoring + place + settle only.
 **Do not invent engine numbers in the UI** — display fields from `risk.json` / `bankroll.json` / `phase.json` / `coverage_health.json` only.
 
 ---
@@ -77,7 +78,7 @@ Honest empty board vs process failure — helper `src/lib/emptySlip.ts` (`classi
 - [x] Dry-run recommend still allowed for inspection; explicit override path for stale live
 - [x] Empty place-slip CTAs point at Board, not bare recommend alone
 - [ ] place-ack / abandon on Shortlist Pending cards | **Deferred PR7**
-- [ ] Day-start process checklist card (settle → odds → board → packs → recommend → place → place-ack) | **Deferred PR9**
+- [x] Day-start process checklist card | **Removed** — superseded by `/daily-run` agent skill; no Desk operator todo list
 
 ## Result taxonomy (real-money correctness)
 

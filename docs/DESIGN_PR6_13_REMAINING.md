@@ -85,12 +85,11 @@ Shipped on main via execute-plan **bea3efca** (2026-07-22). All PR6–13 items b
 
 ---
 
-### PR9 â€” Day-start checklist card
+### PR9 — Day-start checklist card — **REMOVED / SUPERSEDED**
 
-- **Title:** `feat(desk): day-start process checklist card`
-- **Files:** `Dashboard.tsx`, `DayStartChecklist.tsx`
-- **Dependencies:** PR5 hooks
-- **Description:** Persistent card (not modal): settle â†’ odds â†’ board â†’ packs if COVâ†“ â†’ recommend dry-run â†’ place â†’ place-ack.
+- **Status:** **Removed** from Desk UI (not deferred). Superseded by Grok `/daily-run` agent skill.
+- **Was:** `feat(desk): day-start process checklist card` — `Dashboard.tsx`, `DayStartChecklist.tsx`
+- **Now:** Agent owns settle → odds → board → recommend → place. Desk = monitoring + place + settle only. Do **not** reintroduce a user checklist UI.
 
 ---
 
