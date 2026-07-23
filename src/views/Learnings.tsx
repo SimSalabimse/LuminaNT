@@ -114,7 +114,19 @@ function MultTable({
                   {(r.ev_boost * 100).toFixed(1)}pp
                 </td>
                 <td className="px-3 py-2">
-                  <span className={cn("text-[10px] border rounded px-1.5 py-0.5", statusClass(r.status))}>
+                  <span
+                    className={cn(
+                      "text-[10px] border rounded px-1.5 py-0.5",
+                      statusClass(r.status)
+                    )}
+                    title={
+                      r.blocked
+                        ? "Bucket blocked by learn rules"
+                        : String(r.status).toLowerCase() === "thin"
+                          ? "Thin sample — stake mult / EV boost low confidence until n grows"
+                          : undefined
+                    }
+                  >
                     {r.blocked ? "blocked" : r.status}
                   </span>
                 </td>

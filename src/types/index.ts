@@ -262,6 +262,10 @@ export interface SettlementReview {
  * Engine-authored ReasoningChain row (`data/state/reasoning_chains.jsonl`).
  * Optional until full RC loader; clients must tolerate missing / partial.
  * Pipeline: context → light → promo → deep → EV → stake → decision.
+ *
+ * Live engine often emits `kind:"pick"`, `ev_after_haircut`, `controls`, `reasons`.
+ * Pure readers (haircutEvOf / isRecommendedKind / …) map aliases for display —
+ * never mutate kind on disk or in memory (forensic always shows raw pick).
  */
 export interface ReasoningChain {
   reasoning_chain_id?: string;
@@ -272,8 +276,8 @@ export interface ReasoningChain {
   /** Oslo day / board day for join when bet_id absent. */
   day?: string | null;
   /**
-   * Outcome kind: recommended | placed | near_miss | rejected_* | …
-   * Near-miss / rejected_* feed the collapsible near-miss list.
+   * Engine kind as written (e.g. pick | recommended | near_miss | rejected_*).
+   * Never rewrite pick → recommended.
    */
   kind?: string | null;
   /** Simple Mode traffic light: green | amber | red | gray (aliases ok). */
@@ -290,15 +294,40 @@ export interface ReasoningChain {
   p_model?: number | null;
   /** Raw model EV before haircuts (if engine splits). */
   ev?: number | null;
-  /** Haircut / post-gate EV when engine emits it. */
+  /** Haircut / post-gate EV when engine emits it (demo / legacy name). */
   haircut_ev?: number | null;
+  /** Engine post-haircut EV — read via haircutEvOf; alias of haircut_ev. */
+  ev_after_haircut?: number | null;
+  /** Engine haircut rate (e.g. 0.03) — not EV. */
+  haircut?: number | null;
   stake_nok?: number | null;
+  /** Research grade when engine emits it on the chain. */
+  grade?: string | null;
+  /** Engine reason strings — summary / Why this fallbacks. */
+  reasons?: string[] | null;
+  /** Near-miss / reject reason — Why not fallback (not for picks). */
+  reject_reason?: string | null;
+  /** Free-form notes — summary fallback (truncated); not forced into Why not. */
+  notes?: string | null;
+  /** Evidence path basename for Sources when sources[] absent. */
+  evidence_path?: string | null;
+  sport?: string | null;
+  market_key?: string | null;
+  odds_band?: string | null;
   /** Light research / promo breakdown blobs (engine-authored). */
   light?: Record<string, unknown> | string | null;
   promo?: Record<string, unknown> | string | null;
   sources?: Array<string | Record<string, unknown>> | null;
   /** ControlSignals ids or snapshots attached to the chain. */
   control_signals?: Array<Record<string, unknown> | string> | null;
+  /** Nested controls object from live engine (unit_nok, size_mode, explore). */
+  controls?: {
+    size_mode?: string;
+    unit_nok?: number;
+    explore?: boolean;
+    learning_ev_boost?: number;
+    [key: string]: unknown;
+  } | null;
   [key: string]: unknown;
 }
 

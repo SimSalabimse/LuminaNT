@@ -342,7 +342,8 @@ export function Dashboard() {
             </p>
             {stranded.stranded && (
               <div className="mt-2 rounded-lg border border-pending/35 bg-pending/10 px-3 py-2 text-[12px] text-pending font-medium">
-                {stranded.label} — cannot fund another NT ticket until settle frees risk.
+                {stranded.label} — cannot fund another NT ticket until settle
+                frees risk. Min seat 10 NOK · not a freeze.
               </div>
             )}
             {next.showUnfreeze && (

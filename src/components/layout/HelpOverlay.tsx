@@ -266,12 +266,12 @@ export function HelpOverlay() {
               {tab === "flow" && (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    Operator loop for a capital day. Desk checklist mirrors this
-                    order (settle first if Pending stack exists). Prefer Grok{" "}
+                    Operator loop for a capital day. Prefer Grok{" "}
                     <code className="text-primary text-[11px] font-mono bg-primary/10 px-1 rounded">
                       /daily-run
                     </code>{" "}
-                    for the full CLI map.
+                    (agent owns the full CLI map). UI surfaces Desk, Shortlist,
+                    Ops, and Case File — no separate Day-start checklist.
                   </p>
                   <ol className="space-y-2">
                     {DAILY_FLOW.map((row, i) => (
@@ -294,8 +294,8 @@ export function HelpOverlay() {
                     ))}
                   </ol>
                   <p className="text-[11px] text-muted-foreground">
-                    UI path: Desk checklist · Ops Board/Recommend/Settle · Odds ·
-                    Case File. Never invent p_model, equity, or hand-softened
+                    UI path: Desk · Shortlist · Ops Board/Recommend/Settle · Odds
+                    · Case File. Never invent p_model, equity, or hand-softened
                     min_EV.
                   </p>
                 </div>

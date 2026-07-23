@@ -22,6 +22,7 @@ import {
   regimeChipLabel,
   regimeProgressChip,
   secureSkimStatus,
+  strandedRemainder,
   unitSizeChip,
   weeklyExploreQuotaChip,
 } from "@/lib/riskStatus";
@@ -33,6 +34,7 @@ import {
   trafficLightLabel,
   trafficLightTone,
 } from "@/lib/resolveReasoningChain";
+import { coverageChipModel } from "@/lib/coverageChip";
 
 /**
  * Capital strip — calm, scannable, mode-dominant.
@@ -174,6 +176,8 @@ export function DeskStrip() {
   // exploration + legacy calibration share amber shell; calibration also forces STALE banner
   const regimeShellExploration =
     regimeId === "exploration" || regimeId === "calibration";
+  const covChip = coverageChipModel(snapshot.coverage_health);
+  const stranded = strandedRemainder(status, 10);
 
   return (
     <div
@@ -450,6 +454,29 @@ export function DeskStrip() {
           </button>
         )}
 
+        {/* Coverage Health chip — parity with Phase / Mode / Can Bet; missing → — */}
+        <button
+          type="button"
+          onClick={() => setView("shortlist")}
+          title={covChip.title}
+          className={cn(
+            "flex flex-col items-center justify-center rounded-xl border px-3 py-2 min-w-[72px] hover:brightness-110 transition",
+            covChip.shell
+          )}
+        >
+          <span className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
+            COV
+          </span>
+          <span
+            className={cn(
+              "mt-0.5 text-sm font-bold font-mono leading-none",
+              covChip.valueClass
+            )}
+          >
+            {covChip.value}
+          </span>
+        </button>
+
         {/* Can bet — large, single source of truth */}
         <div
           className={cn(
@@ -469,6 +496,11 @@ export function DeskStrip() {
           >
             {status.betLabel}
           </span>
+          {stranded.stranded && (
+            <span className="text-[8px] text-pending mt-0.5 font-semibold uppercase tracking-wide">
+              stranded
+            </span>
+          )}
         </div>
 
         {status.gate === "FROZEN" && (
@@ -504,12 +536,19 @@ export function DeskStrip() {
         </Button>
       </div>
 
-      {/* Reason when blocked and NORMAL (no mode banner) */}
-      {!status.canBet && !modeNotNormal && (
-        <div className="px-4 pb-2.5 -mt-1">
-          <p className="text-[12px] text-muted-foreground leading-snug max-w-3xl">
-            {status.reason}
-          </p>
+      {/* Reason when blocked and NORMAL (no mode banner); stranded one-liner under Can Bet */}
+      {((!status.canBet && !modeNotNormal) || stranded.stranded) && (
+        <div className="px-4 pb-2.5 -mt-1 space-y-1">
+          {!status.canBet && !modeNotNormal && (
+            <p className="text-[12px] text-muted-foreground leading-snug max-w-3xl">
+              {status.reason}
+            </p>
+          )}
+          {stranded.stranded && (
+            <p className="text-[12px] text-pending leading-snug max-w-3xl font-medium">
+              {stranded.label} · min seat 10 NOK · not a freeze
+            </p>
+          )}
         </div>
       )}
 

@@ -1,7 +1,9 @@
 /**
  * Derive shortlist / case-file process gate chips from notes + grade + size_mode.
+ * Grade colors come from shared gradeTone() — keep in sync with SimpleModeCard.
  */
 import type { ControlSignal } from "@/types";
+import { gradeTone } from "@/lib/resolveReasoningChain";
 
 export type GateChip = {
   id: string;
@@ -26,7 +28,7 @@ export function deriveGateChips(input: {
     chips.push({
       id: "grade",
       label: `Grade ${g}`,
-      tone: g === "A" ? "ok" : g === "B" ? "primary" : g === "C" ? "warn" : "loss",
+      tone: gradeTone(g).tone,
     });
   }
   const sm = (input.sizeMode || "").toUpperCase();

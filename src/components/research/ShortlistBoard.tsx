@@ -42,6 +42,7 @@ import {
   classifyEmptySlip,
   emptySlipInputFromCoverage,
 } from "@/lib/emptySlip";
+import { coverageChipModel } from "@/lib/coverageChip";
 import { CoverageHealthPanel } from "@/components/research/CoverageHealthPanel";
 import { DeepQueuePanel } from "@/components/research/DeepQueuePanel";
 import { SimpleModeCard } from "@/components/reasoning/SimpleModeCard";
@@ -194,6 +195,11 @@ export function ShortlistBoard() {
     [cards]
   );
 
+  const covChip = useMemo(
+    () => coverageChipModel(snapshot?.coverage_health),
+    [snapshot?.coverage_health]
+  );
+
   const openCard = (c: ShortlistCard) => {
     if (c.betId) {
       drillForensic({
@@ -304,6 +310,13 @@ export function ShortlistBoard() {
               {status.sizeMode}
             </Badge>
           )}
+          <Badge
+            variant={covChip.variant}
+            className="h-8 px-3 font-bold font-mono"
+            title={covChip.title}
+          >
+            {covChip.label}
+          </Badge>
           <Badge
             variant={status.canBet ? "success" : "loss"}
             className="h-8 px-3 font-bold"
@@ -583,6 +596,13 @@ export function ShortlistBoard() {
                             chain={chain}
                             simpleMode={simpleMode}
                             compact
+                            emphasis={
+                              c.status === "planned" || c.status === "open"
+                                ? "primary"
+                                : "default"
+                            }
+                            fallbackGrade={c.grade}
+                            activeSignals={activeSignals}
                           />
                         )}
                       </div>
