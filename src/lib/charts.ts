@@ -58,6 +58,104 @@ export function fmt2(n: number | null | undefined): string {
   return Number(n).toFixed(2);
 }
 
+/**
+ * Sparse history on wide Performance cards: few category points leave a huge
+ * empty right half when boundaryGap is false and dataZoom spans full width.
+ * Treat n ≤ this as sparse → pad categories, hide zoom slider, larger symbols.
+ */
+export const SPARSE_CATEGORY_MAX = 7;
+
+export function isSparseCategoryCount(n: number): boolean {
+  return n > 0 && n <= SPARSE_CATEGORY_MAX;
+}
+
+export type SparseCategoryAxis = {
+  sparse: boolean;
+  /** Category labels (may include blank pad slots when sparse). */
+  data: string[];
+  boundaryGap: boolean;
+  /** dataZoom config — empty when sparse (slider is noise with 1–2 days). */
+  dataZoom: EChartsOption["dataZoom"];
+  /** Index map: original i → series data index after pads. */
+  seriesIndex: (i: number) => number;
+  /** Pad series values with nulls so blanks don't draw. */
+  padSeries: <T>(values: T[], empty: T) => T[];
+  showSymbol: boolean;
+  symbolSize: number;
+  barMaxWidth: number;
+};
+
+/**
+ * Build category-axis options that keep early-era (1–7 points) centered and
+ * readable instead of glued to the left with empty plot on the right.
+ */
+export function sparseCategoryAxis(
+  categories: string[],
+  opts?: { forBar?: boolean; alwaysSlider?: boolean }
+): SparseCategoryAxis {
+  const n = categories.length;
+  const sparse = isSparseCategoryCount(n);
+  const forBar = Boolean(opts?.forBar);
+
+  // Pad blank slots so 1–2 real days sit mid-plot on a wide card
+  let padLeft = 0;
+  let padRight = 0;
+  if (sparse) {
+    if (n === 1) {
+      padLeft = 2;
+      padRight = 2;
+    } else if (n === 2) {
+      padLeft = 1;
+      padRight = 1;
+    } else if (n <= 4) {
+      padLeft = 1;
+      padRight = 1;
+    }
+  }
+
+  const blanks = (k: number) => Array.from({ length: k }, () => "");
+  const data = [...blanks(padLeft), ...categories, ...blanks(padRight)];
+
+  const seriesIndex = (i: number) => padLeft + i;
+  const padSeries = <T,>(values: T[], empty: T): T[] => [
+    ...Array.from({ length: padLeft }, () => empty),
+    ...values,
+    ...Array.from({ length: padRight }, () => empty),
+  ];
+
+  // Lines: boundaryGap true when sparse so points aren't on the frame edge.
+  // Bars: always gap (default bar behavior).
+  const boundaryGap = forBar ? true : sparse ? true : false;
+
+  const showZoom = !sparse || Boolean(opts?.alwaysSlider);
+  const dataZoom: EChartsOption["dataZoom"] = showZoom
+    ? [
+        { type: "inside", start: 0, end: 100 },
+        {
+          type: "slider",
+          height: 14,
+          bottom: 6,
+          borderColor: "transparent",
+          fillerColor: "rgba(148,163,184,0.12)",
+          handleStyle: { color: chartText.muted },
+          textStyle: { color: chartText.muted, fontSize: 11 },
+        },
+      ]
+    : [{ type: "inside", start: 0, end: 100 }];
+
+  return {
+    sparse,
+    data,
+    boundaryGap,
+    dataZoom,
+    seriesIndex,
+    padSeries,
+    showSymbol: sparse || n < 28,
+    symbolSize: sparse ? (n <= 2 ? 8 : 5) : 3.5,
+    barMaxWidth: sparse ? (n <= 2 ? 48 : 28) : 18,
+  };
+}
+
 function colorForPieSlice(name: string, index: number): string {
   return colorForResult(name, index);
 }
@@ -814,13 +912,24 @@ export function equityChartOption(
   });
   const yBounds = equityAxisBounds(equityYs, hwmYs, baseline);
   const ddMax = drawdownAxisMax(ddPctSeries);
+  const cats = points.map((p) => p.date);
+  const sparseAx = sparseCategoryAxis(cats);
+  const eqData = sparseAx.padSeries(equityYs, null as unknown as number);
+  const hwmData = sparseAx.padSeries(hwmYs, null as unknown as number);
+  const ddData = sparseAx.padSeries(ddPctSeries, null as unknown as number);
 
   return {
     animationDuration: 600,
     animationEasing: "cubicOut",
     backgroundColor: "transparent",
     // Extra top for legend; extra right for DD% ticks (legend no longer sits there)
-    grid: { left: 56, right: showDd ? 48 : 20, top: 44, bottom: 48 },
+    // Less bottom when sparse (no zoom slider)
+    grid: {
+      left: 56,
+      right: showDd ? 48 : 20,
+      top: 44,
+      bottom: sparseAx.sparse ? 28 : 48,
+    },
     tooltip: {
       trigger: "axis",
       ...tooltipBase,
@@ -833,9 +942,13 @@ export function equityChartOption(
         const arr = Array.isArray(params) ? params : [params];
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const d = arr[0] as any;
-        const pt = points[d?.dataIndex];
+        const di = Number(d?.dataIndex ?? -1);
+        const padLeft = sparseAx.seriesIndex(0);
+        const orig = di - padLeft;
+        if (orig < 0 || orig >= points.length) return "";
+        const pt = points[orig];
         if (!pt) return "";
-        const ddPct = ddPctSeries[d?.dataIndex] ?? 0;
+        const ddPct = ddPctSeries[orig] ?? 0;
         return `<div style="font-weight:600;margin-bottom:4px">${pt.date}</div>
           <div style="font-size:11px;color:${chartText.muted};margin-bottom:6px">${dayLabel}</div>
           Equity: <b style="color:${chartColors.profit}">${fmt2(pt.equity)} NOK</b><br/>
@@ -846,10 +959,16 @@ export function equityChartOption(
     },
     xAxis: {
       type: "category",
-      data: points.map((p) => p.date),
-      boundaryGap: false,
-      axisLabel: { ...axisLabel, hideOverlap: true },
+      data: sparseAx.data,
+      boundaryGap: sparseAx.boundaryGap,
+      axisLabel: {
+        ...axisLabel,
+        hideOverlap: true,
+        // Hide blank pad labels
+        formatter: (v: string) => v || "",
+      },
       axisLine: { lineStyle: { color: "rgba(148,163,184,0.22)" } },
+      axisTick: { alignWithLabel: true },
     },
     yAxis: [
       {
@@ -896,24 +1015,14 @@ export function equityChartOption(
       // Keep legend from overlapping plot or right axis
       z: 10,
     },
-    dataZoom: [
-      { type: "inside", start: 0, end: 100 },
-      {
-        type: "slider",
-        height: 14,
-        bottom: 6,
-        borderColor: "transparent",
-        fillerColor: "rgba(148,163,184,0.12)",
-        handleStyle: { color: chartText.muted },
-        textStyle: { color: chartText.muted, fontSize: 11 },
-      },
-    ],
+    dataZoom: sparseAx.dataZoom,
     series: [
       {
         name: "HWM",
         type: "line" as const,
         yAxisIndex: 0,
-        data: hwmYs,
+        data: hwmData,
+        connectNulls: false,
         showSymbol: false,
         smooth: false,
         lineStyle: {
@@ -929,7 +1038,8 @@ export function equityChartOption(
               name: "DD %",
               type: "line" as const,
               yAxisIndex: 1,
-              data: ddPctSeries,
+              data: ddData,
+              connectNulls: false,
               showSymbol: false,
               smooth: 0.1,
               lineStyle: {
@@ -948,10 +1058,11 @@ export function equityChartOption(
         name: "Equity",
         type: "line" as const,
         yAxisIndex: 0,
-        smooth: 0.08,
-        showSymbol: points.length < 28,
-        symbolSize: 3.5,
-        data: equityYs,
+        smooth: sparseAx.sparse ? false : 0.08,
+        connectNulls: false,
+        showSymbol: sparseAx.showSymbol,
+        symbolSize: sparseAx.symbolSize,
+        data: eqData,
         lineStyle: {
           width: 1.75,
           color: chartColors.profit,
@@ -1018,10 +1129,58 @@ export function dailyPlChartOption(
       },
     };
   }
+  const sparseAx = sparseCategoryAxis(
+    rows.map((r) => r.date),
+    { forBar: true }
+  );
+  const barItems = rows.map((r) => ({
+    value: +Number(r.pl).toFixed(2),
+    itemStyle: {
+      color:
+        r.pl >= 0
+          ? {
+              type: "linear" as const,
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: chartColors.profit },
+                { offset: 1, color: withAlpha(chartColors.profit, 0.35) },
+              ],
+            }
+          : {
+              type: "linear" as const,
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: withAlpha(chartColors.loss, 0.45) },
+                { offset: 1, color: chartColors.loss },
+              ],
+            },
+      borderRadius: [5, 5, 0, 0] as [number, number, number, number],
+      shadowBlur: 10,
+      shadowColor:
+        r.pl >= 0 ? "rgba(201,162,39,0.35)" : "rgba(255,107,122,0.32)",
+    },
+  }));
+  // Pad blanks with dash so ECharts skips bars (null itemStyle types are awkward)
+  const paddedBars = sparseAx.padSeries(
+    barItems as unknown as (typeof barItems[0] | "-")[],
+    "-" as unknown as (typeof barItems)[0]
+  );
+
   return {
     animationDuration: 700,
     backgroundColor: "transparent",
-    grid: { left: 52, right: 16, top: 24, bottom: 44 },
+    grid: {
+      left: 52,
+      right: 16,
+      top: 24,
+      bottom: sparseAx.sparse ? 28 : 44,
+    },
     tooltip: {
       trigger: "axis",
       ...tooltipBase,
@@ -1029,7 +1188,9 @@ export function dailyPlChartOption(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       formatter: (params: any) => {
         const p = Array.isArray(params) ? params[0] : params;
+        if (!p?.name) return "";
         const v = Number(p?.value ?? 0);
+        if (p?.value == null || Number.isNaN(v)) return "";
         const name = p?.name ?? "";
         return `<div style="font-weight:600;margin-bottom:4px">${name}</div>
           P/L: <b style="color:${v >= 0 ? chartColors.profit : chartColors.loss}">${v >= 0 ? "+" : ""}${fmt2(v)} NOK</b>
@@ -1038,55 +1199,27 @@ export function dailyPlChartOption(
     },
     xAxis: {
       type: "category",
-      data: rows.map((r) => r.date),
-      axisLabel: { ...axisLabel, hideOverlap: true },
+      data: sparseAx.data,
+      boundaryGap: sparseAx.boundaryGap,
+      axisLabel: {
+        ...axisLabel,
+        hideOverlap: true,
+        formatter: (v: string) => v || "",
+      },
       axisLine: { lineStyle: { color: "rgba(148,163,184,0.22)" } },
+      axisTick: { alignWithLabel: true },
     },
     yAxis: {
       type: "value",
       axisLabel: { ...axisLabel, formatter: (v: number) => fmt2(v) },
       splitLine,
     },
-    dataZoom: [{ type: "inside" }, { type: "slider", height: 16, bottom: 6 }],
+    dataZoom: sparseAx.dataZoom,
     series: [
       {
         type: "bar",
-        data: rows.map((r) => ({
-          value: +Number(r.pl).toFixed(2),
-          itemStyle: {
-            color:
-              r.pl >= 0
-                ? {
-                    type: "linear",
-                    x: 0,
-                    y: 0,
-                    x2: 0,
-                    y2: 1,
-                    colorStops: [
-                      { offset: 0, color: chartColors.profit },
-                      { offset: 1, color: withAlpha(chartColors.profit, 0.35) },
-                    ],
-                  }
-                : {
-                    type: "linear",
-                    x: 0,
-                    y: 0,
-                    x2: 0,
-                    y2: 1,
-                    colorStops: [
-                      { offset: 0, color: withAlpha(chartColors.loss, 0.45) },
-                      { offset: 1, color: chartColors.loss },
-                    ],
-                  },
-            borderRadius: [5, 5, 0, 0],
-            shadowBlur: 10,
-            shadowColor:
-              r.pl >= 0
-                ? "rgba(201,162,39,0.35)"
-                : "rgba(255,107,122,0.32)",
-          },
-        })),
-        barMaxWidth: 18,
+        data: paddedBars,
+        barMaxWidth: sparseAx.barMaxWidth,
       },
     ],
   };
@@ -1370,22 +1503,46 @@ export function trendLineOption(
   name: string,
   asPct = false
 ): EChartsOption {
+  const sparseAx = sparseCategoryAxis(points.map((p) => p.date));
+  const values = points.map((p) =>
+    asPct ? +p.value.toFixed(4) : +Number(p.value).toFixed(2)
+  );
+  const padded = sparseAx.padSeries(values, null as unknown as number);
+
   return {
     animationDuration: 700,
     backgroundColor: "transparent",
-    grid: { left: 48, right: 16, top: 28, bottom: 36 },
+    grid: {
+      left: 48,
+      right: 16,
+      top: 28,
+      bottom: sparseAx.sparse ? 28 : 36,
+    },
     tooltip: {
       trigger: "axis",
       backgroundColor: tooltipBg,
       textStyle: { color: chartText.strong },
-      valueFormatter: (v) =>
-        asPct ? `${(Number(v) * 100).toFixed(1)}%` : fmt2(Number(v)),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      formatter: (params: any) => {
+        const p = Array.isArray(params) ? params[0] : params;
+        if (!p?.name || p?.value == null || p?.value === "") return "";
+        const v = Number(p.value);
+        const shown = asPct
+          ? `${(v * 100).toFixed(1)}%`
+          : fmt2(v);
+        return `<div style="font-weight:600;margin-bottom:4px">${p.name}</div>${name}: <b>${shown}</b>`;
+      },
     },
     xAxis: {
       type: "category",
-      data: points.map((p) => p.date),
-      axisLabel,
+      data: sparseAx.data,
+      boundaryGap: sparseAx.boundaryGap,
+      axisLabel: {
+        ...axisLabel,
+        formatter: (v: string) => v || "",
+      },
       axisLine: { lineStyle: { color: "rgba(148,163,184,0.25)" } },
+      axisTick: { alignWithLabel: true },
     },
     yAxis: {
       type: "value",
@@ -1397,15 +1554,16 @@ export function trendLineOption(
       },
       splitLine,
     },
+    dataZoom: sparseAx.dataZoom,
     series: [
       {
         name,
         type: "line",
-        smooth: true,
-        showSymbol: false,
-        data: points.map((p) =>
-          asPct ? +p.value.toFixed(4) : +Number(p.value).toFixed(2)
-        ),
+        smooth: sparseAx.sparse ? false : true,
+        connectNulls: false,
+        showSymbol: sparseAx.showSymbol,
+        symbolSize: sparseAx.symbolSize,
+        data: padded,
         lineStyle: { width: 2, color: chartColors.cyan },
         areaStyle: {
           color: {
