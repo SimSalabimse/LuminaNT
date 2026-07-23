@@ -84,7 +84,7 @@ export function CommandPalette() {
       },
       {
         id: "h",
-        label: "Keyboard shortcuts",
+        label: "Help — desk flow & skills",
         icon: Keyboard,
         keys: "?",
         run: () => {

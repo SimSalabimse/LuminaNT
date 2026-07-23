@@ -220,7 +220,7 @@ export function TopBar() {
             </Button>
           </TooltipTrigger>
           <TooltipContent className="flex items-center gap-2">
-            Shortcuts <Kbd>?</Kbd>
+            Desk help <Kbd>?</Kbd>
           </TooltipContent>
         </Tooltip>
 

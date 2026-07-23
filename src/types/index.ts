@@ -213,7 +213,10 @@ export interface RiskState {
   [key: string]: unknown;
 }
 
-/** ControlSignals JSONL row (temp_gate_raise or revoke). */
+/**
+ * ControlSignals JSONL row.
+ * Kinds include temp_gate_raise, temp_ev_relax (EV-RELAX), revoke.
+ */
 export interface ControlSignal {
   kind?: string;
   ts?: string;
@@ -222,6 +225,10 @@ export interface ControlSignal {
   sport?: string;
   market?: string | null;
   min_ev_raise?: number;
+  /** temp_ev_relax: soft delta on min_EV (e.g. 0.01–0.02). */
+  delta_ev?: number | null;
+  /** temp_ev_relax: stake mult while active (often 0.80). */
+  stake_mult?: number | null;
   force_confirmed_lineup?: boolean;
   source?: string;
   bet_id?: string | null;
@@ -232,14 +239,43 @@ export interface ControlSignal {
   [key: string]: unknown;
 }
 
+/**
+ * Settlement review / PostSettlementPacket fields.
+ * Taxonomy: predictability × variance_class → learning_weight (engine).
+ */
 export interface SettlementReview {
   bet_id?: string;
   ts?: string;
+  /** How knowable outcome was at research time. */
+  predictability?: string;
   variance_class?: string;
+  /** clamp(base[variance] × pred_mult[predictability], 0, 1) from engine. */
+  learning_weight?: number | null;
   research_quality_retro?: string;
   process_root_cause?: string;
   score?: string;
   factors?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/**
+ * Engine-authored ReasoningChain row (`data/state/reasoning_chains.jsonl`).
+ * Optional until full RC loader; clients must tolerate missing / partial.
+ */
+export interface ReasoningChain {
+  reasoning_chain_id?: string;
+  bet_id?: string | null;
+  match?: string;
+  selection?: string;
+  decimal_odds?: number;
+  /** Simple Mode traffic light / summary when present. */
+  traffic_light?: string | null;
+  summary?: string | null;
+  steps?: Array<Record<string, unknown>>;
+  decision?: string | null;
+  p_model?: number | null;
+  ev?: number | null;
+  stake_nok?: number | null;
   [key: string]: unknown;
 }
 
@@ -366,6 +402,8 @@ export interface DecisionRecord {
   implied_prob?: number;
   backfill?: boolean;
   recovered_from_notes?: boolean;
+  /** Join to reasoning_chains.jsonl when engine emits chain ids. */
+  reasoning_chain_id?: string | null;
   [key: string]: unknown;
 }
 
@@ -490,6 +528,11 @@ export interface TrackerSnapshot {
    * Missing file → empty object from loader; panels must null-safe (no invented %).
    */
   deep_queue?: DeepQueueState | Record<string, unknown> | null;
+  /**
+   * Reasoning chains SSOT (`data/state/reasoning_chains.jsonl`).
+   * Optional — tolerate missing until Tauri/demo loader wires the file.
+   */
+  reasoning_chains?: ReasoningChain[] | null;
 }
 
 export interface LearningBucket {
