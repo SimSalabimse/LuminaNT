@@ -62,7 +62,7 @@ const DESK_CHIPS: { chip: string; meaning: string }[] = [
   {
     chip: "COV",
     meaning:
-      "Coverage Health level (ok / warn / critical). COV FORCE = engine prioritises deep packs. DayStart packs step only when COV↓.",
+      "Coverage Health level (ok / warn / critical). COV FORCE = engine prioritises deep packs when coverage is weak.",
   },
   {
     chip: "CFLOOR",
