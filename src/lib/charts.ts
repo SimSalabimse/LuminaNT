@@ -722,6 +722,66 @@ export function heatmapSparkOption(
   };
 }
 
+/**
+ * Bankroll equity Y-axis bounds.
+ * Avoids ECharts `scale:true` zooming into a sub-NOK band (e.g. 499.20–500.00)
+ * when early-era equity barely moved — that makes a −0.80 NOK day look catastrophic.
+ *
+ * Includes baseline when provided; enforces a minimum span so thin series stay
+ * readable in bankroll context (min ~5% of baseline or 25 NOK).
+ */
+export function equityAxisBounds(
+  equityYs: number[],
+  hwmYs: number[],
+  baseline?: number
+): { min: number; max: number } {
+  const vals = [...equityYs, ...hwmYs];
+  if (baseline != null && Number.isFinite(baseline)) vals.push(baseline);
+  const dataMin = Math.min(...vals);
+  const dataMax = Math.max(...vals);
+  const level = Math.max(
+    Math.abs(baseline ?? dataMax),
+    Math.abs(dataMax),
+    100
+  );
+  // Minimum visual span: 5% of bankroll level or 25 NOK, whichever larger
+  const minSpan = Math.max(level * 0.05, 25);
+  let lo = dataMin;
+  let hi = dataMax;
+  const span = hi - lo;
+  if (span < minSpan) {
+    const mid = (lo + hi) / 2;
+    lo = mid - minSpan / 2;
+    hi = mid + minSpan / 2;
+  }
+  // Pad ~12% so lines don't kiss the frame
+  const pad = Math.max((hi - lo) * 0.12, 5);
+  lo -= pad;
+  hi += pad;
+  // Keep axis non-negative for typical bankroll charts when data stays positive
+  if (dataMin >= 0 && lo < 0) lo = 0;
+  // Nice-ish round to 5 NOK for scannable ticks
+  const round5 = (x: number, dir: "floor" | "ceil") => {
+    const s = 5;
+    return dir === "floor"
+      ? Math.floor(x / s) * s
+      : Math.ceil(x / s) * s;
+  };
+  return {
+    min: round5(lo, "floor"),
+    max: round5(hi, "ceil"),
+  };
+}
+
+/** DD% right axis — scale to data, not a fixed 12% floor that flattens tiny DD. */
+export function drawdownAxisMax(ddPctSeries: number[]): number {
+  const m = Math.max(0, ...ddPctSeries.map((x) => Number(x) || 0));
+  if (m <= 0.5) return 2; // sub-1% era: show 0–2%
+  if (m <= 3) return 5;
+  if (m <= 8) return 10;
+  return Math.max(12, Math.ceil(m + 2));
+}
+
 export function equityChartOption(
   points: EquityPoint[],
   opts?: { baseline?: number; dateModeLabel?: string; showDdBand?: boolean }
@@ -752,6 +812,8 @@ export function equityChartOption(
     const eq = equityYs[i];
     return h > 0 ? +(((h - eq) / h) * 100).toFixed(2) : 0;
   });
+  const yBounds = equityAxisBounds(equityYs, hwmYs, baseline);
+  const ddMax = drawdownAxisMax(ddPctSeries);
 
   return {
     animationDuration: 600,
@@ -793,7 +855,10 @@ export function equityChartOption(
         type: "value",
         name: "NOK",
         nameTextStyle: { color: chartText.muted, fontSize: 10 },
-        scale: true,
+        // Fixed bankroll-aware bounds — do not use scale:true (micro-zoom)
+        min: yBounds.min,
+        max: yBounds.max,
+        scale: false,
         axisLabel: { ...axisLabel, formatter: (v: number) => fmt2(v) },
         splitLine,
       },
@@ -804,7 +869,7 @@ export function equityChartOption(
               name: "DD%",
               nameTextStyle: { color: chartText.muted, fontSize: 10 },
               min: 0,
-              max: (v: { max: number }) => Math.max(12, Math.ceil(v.max + 2)),
+              max: ddMax,
               axisLabel: {
                 ...axisLabel,
                 formatter: (x: number) => `${x}%`,
