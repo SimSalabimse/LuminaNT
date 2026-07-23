@@ -180,9 +180,10 @@ export function deriveRiskStatus(
   } else if (!engineCanBet || remaining + 1e-9 < minStake) {
     gate = "NO_ROOM";
     if (remaining + 1e-9 < minStake) {
-      reason = `Remaining ${remaining.toFixed(0)} NOK below ${minStake} NOK floor — wait for settle or free risk`;
+      reason = `Wait for room — ${remaining.toFixed(0)} NOK left under ${minStake} NOK min seat. Settle or abandon frees risk; floor unchanged.`;
     } else {
-      reason = "Cannot bet — remaining room or diversify limits";
+      reason =
+        "Wait for room — engine can_bet false (room or diversify). Check Open room / Day room in Details.";
     }
   } else if (sizeMode === "REDUCED") {
     gate = "REDUCED";
@@ -590,7 +591,7 @@ export function strandedRemainder(
     return {
       stranded: true,
       amount: rem,
-      label: `Stranded ${rem.toFixed(0)} NOK under ${minStake} min seat`,
+      label: `Stranded ${rem.toFixed(0)} NOK under ${minStake} NOK min seat`,
     };
   }
   return { stranded: false, amount: 0, label: "" };

@@ -410,13 +410,28 @@ export function CalibrationPanel() {
         />
       ) : (
         <>
+          {report.n > 0 && report.n < 20 && (
+            <div
+              role="status"
+              className="rounded-xl border border-pending/35 bg-pending/10 px-4 py-2.5 text-[12px] text-pending font-medium leading-relaxed"
+            >
+              Caution — usable sample n={report.n} is under 20. Treat Brier /
+              bias as directional only until the set grows; do not over-react on
+              single-bucket noise.
+            </div>
+          )}
           {/* Key metrics */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
             <Metric
               label="Sample size (n)"
               value={String(report.n)}
-              sub="settled with p_model"
+              sub={
+                report.n < 20
+                  ? "thin — caution"
+                  : "settled with p_model"
+              }
               tip="How many finished bets are in this set. Small n → don't over-react."
+              tone={report.n < 20 ? "neutral" : "good"}
             />
             <Metric
               label="Brier"
