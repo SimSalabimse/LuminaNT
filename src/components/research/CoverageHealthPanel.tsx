@@ -133,8 +133,12 @@ export function CoverageHealthPanel({
               {level}
             </Badge>
           ) : (
-            <Badge variant="secondary" className="h-7 px-2.5 font-bold">
-              NOT LOADED
+            <Badge
+              variant="secondary"
+              className="h-7 px-2.5 font-semibold"
+              title="No coverage_health.json on snapshot — fail-closed until board/recommend writes SSOT"
+            >
+              No signal
             </Badge>
           )}
           {covForce && (
@@ -177,13 +181,18 @@ export function CoverageHealthPanel({
       </div>
 
       {!loaded ? (
-        <div className="px-5 py-6 text-sm text-muted-foreground leading-relaxed">
-          No Coverage Health signal on this snapshot (
-          <span className="font-mono text-[12px]">
-            data/state/coverage_health.json
-          </span>
-          ). Fail-closed: do not treat an empty slip as success until board /
-          research writes health.
+        <div className="px-5 py-6 text-sm text-muted-foreground leading-relaxed space-y-1.5">
+          <p className="font-medium text-foreground/80">No signal</p>
+          <p>
+            No{" "}
+            <span className="font-mono text-[12px]">
+              coverage_health.json
+            </span>{" "}
+            on this snapshot. Fail-closed: do not treat an empty slip as success
+            until board / research writes health. Chip shows{" "}
+            <span className="font-mono">—</span> on Desk / Shortlist (expected
+            until engine writes SSOT).
+          </p>
         </div>
       ) : (
         <>
