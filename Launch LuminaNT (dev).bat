@@ -11,11 +11,21 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if not exist "node_modules\" (
-  echo Installing npm packages...
+REM node_modules may exist but be empty/broken after cleanup — require the Tauri CLI.
+if not exist "node_modules\.bin\tauri.cmd" (
+  echo Installing npm packages ^(Tauri CLI missing or node_modules incomplete^)...
+  if exist "node_modules\" (
+    rmdir /s /q "node_modules" 2>nul
+  )
   call npm install
   if errorlevel 1 (
     echo npm install failed.
+    pause
+    exit /b 1
+  )
+  if not exist "node_modules\.bin\tauri.cmd" (
+    echo ERROR: @tauri-apps/cli still missing after npm install.
+    echo Try:  npm install
     pause
     exit /b 1
   )

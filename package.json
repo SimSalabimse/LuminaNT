@@ -9,8 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
+    "tauri:dev": "npx --no-install tauri dev",
+    "tauri:build": "npx --no-install tauri build",
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
