@@ -403,12 +403,14 @@ export function HelpOverlay() {
                         <strong className="text-foreground">
                           Simple Mode (progressive disclosure):
                         </strong>{" "}
-                        one-line verdict + traffic light + Why / Why not, then
-                        expand full chain. UI component lands with Case File
-                        section 0; until then use{" "}
+                        default on in Settings. One-line verdict + traffic light
+                        (green / amber / red / gray) + Why this / Why not, then
+                        expand full chain (line · light+promo · sources ·
+                        p_model · haircut EV · stake · ControlSignals). Wired on{" "}
                         <strong className="text-foreground">Case File</strong>{" "}
-                        blocks (decision · stake · evidence · notes ·
-                        PostSettlementPacket) and{" "}
+                        section 0, Shortlist card expand, optional DeskStrip RC
+                        chip, and Near-miss / Rejected list. Engine SSOT only —
+                        do not invent haircut EV from notes. Also{" "}
                         <code className="font-mono text-[10px]">
                           /chain-explain
                         </code>

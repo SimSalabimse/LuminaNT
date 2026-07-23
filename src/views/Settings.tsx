@@ -197,6 +197,33 @@ export function Settings() {
 
       <section className="glass rounded-xl p-5 space-y-4">
         <h2 className="text-sm font-semibold flex items-center gap-2">
+          <Info className="h-4 w-4 text-primary" />
+          Reasoning · Simple Mode
+        </h2>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Progressive disclosure for engine ReasoningChain SSOT. When on
+          (default), Case File and Shortlist show a one-line traffic-light
+          verdict first; expand for the full chain. When off, full chain is
+          always open.
+        </p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <Label>Simple Mode</Label>
+            <p className="text-xs text-muted-foreground">
+              One sentence + light → Why / full chain
+            </p>
+          </div>
+          <Switch
+            checked={local.simpleMode !== false}
+            onCheckedChange={(simpleMode) =>
+              setLocal((s) => ({ ...s, simpleMode }))
+            }
+          />
+        </div>
+      </section>
+
+      <section className="glass rounded-xl p-5 space-y-4">
+        <h2 className="text-sm font-semibold flex items-center gap-2">
           <Bell className="h-4 w-4 text-primary" />
           OS notifications
         </h2>

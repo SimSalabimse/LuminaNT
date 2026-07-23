@@ -44,6 +44,9 @@ import {
 } from "@/lib/emptySlip";
 import { CoverageHealthPanel } from "@/components/research/CoverageHealthPanel";
 import { DeepQueuePanel } from "@/components/research/DeepQueuePanel";
+import { SimpleModeCard } from "@/components/reasoning/SimpleModeCard";
+import { NearMissList } from "@/components/reasoning/NearMissList";
+import { resolveReasoningChain } from "@/lib/resolveReasoningChain";
 
 /** Ledger Pending (intent) — place-ack target. Not ConfirmedPlaced. */
 function isLedgerPending(result: string | null | undefined): boolean {
@@ -143,11 +146,13 @@ export function ShortlistBoard() {
   const drillForensic = useDataStore((s) => s.drillForensic);
   const setView = useAppStore((s) => s.setView);
   const demo = useAppStore((s) => s.settings.demoMode);
+  const simpleMode = useAppStore((s) => s.settings.simpleMode !== false);
   const setToast = useAppStore((s) => s.setToast);
   const setError = useAppStore((s) => s.setError);
   const [expanded, setExpanded] = useState<string | null>(null);
   /** Bet id currently running place-ack / abandon (single-card busy state). */
   const [busyId, setBusyId] = useState<string | null>(null);
+  const reasoningChains = snapshot?.reasoning_chains;
 
   const status = useMemo(
     () => deriveRiskStatus(snapshot?.risk, snapshot?.bankroll, snapshot?.phase),
@@ -353,6 +358,7 @@ export function ShortlistBoard() {
 
       <CoverageHealthPanel placeEmpty={cards.length === 0} />
       <DeepQueuePanel />
+      <NearMissList chains={reasoningChains} simpleMode={simpleMode} />
 
       {cards.length === 0 && emptySlip ? (
         <div
@@ -419,6 +425,11 @@ export function ShortlistBoard() {
               status.liquid > 0 && c.stake
                 ? (c.stake / status.liquid) * 100
                 : null;
+            const chain = resolveReasoningChain(reasoningChains, {
+              betId: c.betId,
+              match: c.match,
+              selection: c.selection,
+            });
 
             return (
               <article
@@ -563,9 +574,18 @@ export function ShortlistBoard() {
                       )}
                     </button>
                     {isOpen && (
-                      <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground border-t border-white/[0.06] pt-2">
-                        {rationale.detail}
-                      </p>
+                      <div className="mt-2 space-y-2 border-t border-white/[0.06] pt-2">
+                        <p className="text-[12px] leading-relaxed text-muted-foreground">
+                          {rationale.detail}
+                        </p>
+                        {chain && (
+                          <SimpleModeCard
+                            chain={chain}
+                            simpleMode={simpleMode}
+                            compact
+                          />
+                        )}
+                      </div>
                     )}
                   </div>
 

@@ -148,6 +148,20 @@ const DEMO_PACKAGE_RISK: TrackerSnapshot["risk"] = {
   },
 };
 
+function parseJsonl(raw: string): Array<Record<string, unknown>> {
+  return raw
+    .split("\n")
+    .filter((l) => l.trim())
+    .map((l) => {
+      try {
+        return JSON.parse(l) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean) as Array<Record<string, unknown>>;
+}
+
 export async function loadDemoSnapshot(): Promise<TrackerSnapshot> {
   const base = "/demo-data";
   const [
@@ -161,6 +175,7 @@ export async function loadDemoSnapshot(): Promise<TrackerSnapshot> {
     place_these,
     coverage_health,
     deep_queue,
+    reasoningRaw,
   ] = await Promise.all([
     fetchText(`${base}/bets.csv`),
     fetchJson(`${base}/bankroll.json`),
@@ -172,19 +187,11 @@ export async function loadDemoSnapshot(): Promise<TrackerSnapshot> {
     fetchText(`${base}/PLACE_THESE.md`),
     fetchJson(`${base}/coverage_health.json`),
     fetchJson(`${base}/deep_queue.json`),
+    fetchText(`${base}/reasoning_chains.jsonl`),
   ]);
 
-  const edges = edgesRaw
-    .split("\n")
-    .filter((l) => l.trim())
-    .map((l) => {
-      try {
-        return JSON.parse(l);
-      } catch {
-        return null;
-      }
-    })
-    .filter(Boolean);
+  const edges = parseJsonl(edgesRaw);
+  const reasoning_chains = parseJsonl(reasoningRaw) as TrackerSnapshot["reasoning_chains"];
 
   // File-based SSOT wins; package constants fill gaps / empty fetch.
   const bankrollMerged = {
@@ -244,6 +251,7 @@ export async function loadDemoSnapshot(): Promise<TrackerSnapshot> {
     settlement_reviews: [],
     coverage_health: coverage_health as TrackerSnapshot["coverage_health"],
     deep_queue: deep_queue as TrackerSnapshot["deep_queue"],
+    reasoning_chains: reasoning_chains ?? [],
     edges_summary_md: "",
     phase_plan_md: "",
     bankroll_plan_md: "",

@@ -94,4 +94,7 @@ pub struct TrackerSnapshot {
     /// Deep queue composition SSOT (`data/state/deep_queue.json`, D17)
     #[serde(default)]
     pub deep_queue: Value,
+    /// Reasoning chains SSOT (`data/state/reasoning_chains.jsonl`)
+    #[serde(default)]
+    pub reasoning_chains: Vec<Value>,
 }

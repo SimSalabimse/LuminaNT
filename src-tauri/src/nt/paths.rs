@@ -222,6 +222,13 @@ pub fn deep_queue_json(root: &Path) -> PathBuf {
         .join("deep_queue.json")
 }
 
+/// Reasoning chains SSOT (`data/state/reasoning_chains.jsonl`).
+pub fn reasoning_chains_jsonl(root: &Path) -> PathBuf {
+    root.join("data")
+        .join("state")
+        .join("reasoning_chains.jsonl")
+}
+
 pub fn edges_summary_md(root: &Path) -> PathBuf {
     root.join("data").join("state").join("edges_summary.md")
 }

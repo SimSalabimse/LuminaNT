@@ -261,6 +261,7 @@ export interface SettlementReview {
 /**
  * Engine-authored ReasoningChain row (`data/state/reasoning_chains.jsonl`).
  * Optional until full RC loader; clients must tolerate missing / partial.
+ * Pipeline: context → light → promo → deep → EV → stake → decision.
  */
 export interface ReasoningChain {
   reasoning_chain_id?: string;
@@ -268,14 +269,36 @@ export interface ReasoningChain {
   match?: string;
   selection?: string;
   decimal_odds?: number;
-  /** Simple Mode traffic light / summary when present. */
+  /** Oslo day / board day for join when bet_id absent. */
+  day?: string | null;
+  /**
+   * Outcome kind: recommended | placed | near_miss | rejected_* | …
+   * Near-miss / rejected_* feed the collapsible near-miss list.
+   */
+  kind?: string | null;
+  /** Simple Mode traffic light: green | amber | red | gray (aliases ok). */
   traffic_light?: string | null;
+  /** One-sentence Simple Mode verdict when present. */
   summary?: string | null;
+  /** Progressive disclosure: why this line / why not alternatives. */
+  why?: string | null;
+  why_not?: string | null;
+  why_this?: string | null;
+  why_not_this?: string | null;
   steps?: Array<Record<string, unknown>>;
   decision?: string | null;
   p_model?: number | null;
+  /** Raw model EV before haircuts (if engine splits). */
   ev?: number | null;
+  /** Haircut / post-gate EV when engine emits it. */
+  haircut_ev?: number | null;
   stake_nok?: number | null;
+  /** Light research / promo breakdown blobs (engine-authored). */
+  light?: Record<string, unknown> | string | null;
+  promo?: Record<string, unknown> | string | null;
+  sources?: Array<string | Record<string, unknown>> | null;
+  /** ControlSignals ids or snapshots attached to the chain. */
+  control_signals?: Array<Record<string, unknown> | string> | null;
   [key: string]: unknown;
 }
 
@@ -740,12 +763,17 @@ export interface AppSettings {
   aiModel: string;
   demoMode: boolean;
   /**
-   * D18 � Opt-in OS toast when coverage_health.level transitions to critical.
+   * Progressive disclosure for ReasoningChain UI.
+   * Default true: show SimpleModeCard first; expand for full chain.
+   */
+  simpleMode?: boolean;
+  /**
+   * D18 — Opt-in OS toast when coverage_health.level transitions to critical.
    * Default off. Demo mode never fires.
    */
   notifyCoverageCritical?: boolean;
   /**
-   * D18 � Opt-in OS toast when risk schema becomes stale (pre-package export).
+   * D18 — Opt-in OS toast when risk schema becomes stale (pre-package export).
    * Default off. Demo mode never fires.
    */
   notifyStaleRisk?: boolean;

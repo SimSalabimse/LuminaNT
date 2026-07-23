@@ -1,8 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ReactECharts from "echarts-for-react";
 import { useDataStore } from "@/stores/data-store";
 import { openRiskConcentration, riskHeatmapMatrix } from "@/lib/analytics";
-import { openRiskBySportOption, riskHeatmapOption } from "@/lib/charts";
+import {
+  openRiskBySportOption,
+  preferOpenRiskBars,
+  riskHeatmapOption,
+} from "@/lib/charts";
 import { formatNokPlain, resultDisplayLabel, isOpenRisk } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,9 +16,9 @@ import { cn } from "@/lib/utils";
  * Open-risk concentration — always visible on Desk.
  * Pending + ConfirmedPlaced only (engine open-risk definition).
  *
- * Default: sport bars (readable with 1–3 sports). Heatmap for denser matrices.
- * Chart height is content-driven so fullscreen does not stretch a single cell
- * into an unreadable slab.
+ * Default: sport bars when sports ≤ 3 OR statuses ≤ 1 (single-status open risk
+ * must never render as a full-width gold heatmap slab). Heatmap only for denser
+ * multi-status matrices. Chart height is content-driven.
  */
 export function OpenRiskConcentration() {
   const allBets = useDataStore((s) => s.bets);
@@ -25,35 +29,46 @@ export function OpenRiskConcentration() {
   const conc = useMemo(() => openRiskConcentration(allBets), [allBets]);
   const matrix = useMemo(() => riskHeatmapMatrix(allBets), [allBets]);
 
-  // Prefer bars when sparse — one sport × one status heatmap was unreadable.
-  const sparse =
-    matrix.sports.length <= 2 && matrix.statuses.length <= 2;
-  const [mode, setMode] = useState<"bars" | "heatmap">(
-    sparse ? "bars" : "heatmap"
+  // Force bars for sparse desks: ≤3 sports OR only one open-status column
+  const forceBars = preferOpenRiskBars(
+    matrix.sports.length,
+    matrix.statuses.length
   );
+  const [mode, setMode] = useState<"bars" | "heatmap">(
+    forceBars ? "bars" : "heatmap"
+  );
+
+  // Keep mode honest when matrix shape changes (e.g. all Pending → one status)
+  useEffect(() => {
+    if (forceBars && mode === "heatmap") setMode("bars");
+  }, [forceBars, mode]);
 
   const forensicActive =
     (filters.betIds?.length || 0) > 0 || (filters.forensicTrail?.length || 0) > 0;
 
+  // Effective mode: never heatmap when forceBars (single-status / ≤3 sports)
+  const effectiveMode: "bars" | "heatmap" =
+    forceBars || mode === "bars" ? "bars" : "heatmap";
+
   const chartOpt = useMemo(
     () =>
-      mode === "heatmap"
+      effectiveMode === "heatmap"
         ? riskHeatmapOption(matrix)
         : openRiskBySportOption(conc.bySport),
-    [mode, matrix, conc.bySport]
+    [effectiveMode, matrix, conc.bySport]
   );
 
   /** Content-height only — never fill a tall fullscreen pane with one fat bar. */
   const chartHeight = useMemo(() => {
     if (conc.bySport.length === 0) return 120;
-    if (mode === "bars") {
+    if (effectiveMode === "bars") {
       // ~40px per sport row + axis padding
       return Math.min(280, Math.max(100, conc.bySport.length * 44 + 36));
     }
     // heatmap: row height fixed; cap total so 1×1 stays compact
     const rows = Math.max(1, matrix.sports.length);
     return Math.min(280, Math.max(120, rows * 48 + 48));
-  }, [mode, conc.bySport.length, matrix.sports.length]);
+  }, [effectiveMode, conc.bySport.length, matrix.sports.length]);
 
   const onSportClick = (sport: string, status?: string) => {
     const ids = allBets
@@ -126,7 +141,7 @@ export function OpenRiskConcentration() {
               type="button"
               className={cn(
                 "px-2.5 py-1 rounded-md transition-colors",
-                mode === "bars"
+                effectiveMode === "bars"
                   ? "bg-primary text-primary-foreground font-medium"
                   : "text-muted-foreground hover:text-foreground"
               )}
@@ -136,13 +151,22 @@ export function OpenRiskConcentration() {
             </button>
             <button
               type="button"
+              disabled={forceBars}
+              title={
+                forceBars
+                  ? "Heatmap needs ≥2 statuses and >3 sports — bars preferred"
+                  : "Sport × status heatmap"
+              }
               className={cn(
                 "px-2.5 py-1 rounded-md transition-colors",
-                mode === "heatmap"
+                forceBars && "opacity-40 cursor-not-allowed",
+                effectiveMode === "heatmap"
                   ? "bg-primary text-primary-foreground font-medium"
                   : "text-muted-foreground hover:text-foreground"
               )}
-              onClick={() => setMode("heatmap")}
+              onClick={() => {
+                if (!forceBars) setMode("heatmap");
+              }}
             >
               Heatmap
             </button>
@@ -185,7 +209,7 @@ export function OpenRiskConcentration() {
               style={{ height: chartHeight }}
             >
               <ReactECharts
-                key={`${mode}-${conc.n}-${conc.totalStake}-${chartHeight}`}
+                key={`${effectiveMode}-${conc.n}-${conc.totalStake}-${chartHeight}`}
                 option={chartOpt}
                 style={{ height: "100%", width: "100%" }}
                 opts={{ renderer: "canvas" }}
@@ -193,11 +217,11 @@ export function OpenRiskConcentration() {
                 lazyUpdate
                 onEvents={{
                   click: (p: { name?: string; data?: number[] }) => {
-                    if (mode === "bars" && p?.name) {
+                    if (effectiveMode === "bars" && p?.name) {
                       onSportClick(String(p.name));
                       return;
                     }
-                    if (mode === "heatmap" && Array.isArray(p?.data)) {
+                    if (effectiveMode === "heatmap" && Array.isArray(p?.data)) {
                       const status = matrix.statuses[p.data[0]];
                       const sport = matrix.sports[p.data[1]];
                       if (sport) onSportClick(sport, status);

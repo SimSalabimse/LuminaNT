@@ -194,11 +194,22 @@ export function fluidPlChartOption(points: EquityPoint[]): EChartsOption {
   };
 }
 
-/** Horizontal stacked-style open risk by sport (single series bar for density). */
+/**
+ * Prefer bars when sports are few or there is only one open-status column.
+ * Single-status heatmaps render as one fat gold slab — unreadable.
+ */
+export function preferOpenRiskBars(
+  sportsCount: number,
+  statusesCount: number
+): boolean {
+  return sportsCount <= 3 || statusesCount <= 1;
+}
+
 /**
  * Open-risk by sport — horizontal bars.
- * Tuned for sparse desks (1–3 sports): readable labels, NOK units, room for
- * value labels, no full-bleed single-cell stretch in wide/fullscreen layouts.
+ * Tuned for sparse desks (1–3 sports): high-contrast outside labels
+ * (`16.00 NOK · 1t`), capped bar thickness, room for right-side labels,
+ * distinct per-sport colors (never pale text on gold).
  */
 export function openRiskBySportOption(
   rows: { sport: string; stake: number; n: number }[]
@@ -216,15 +227,18 @@ export function openRiskBySportOption(
   // Largest stake on top for scan order
   const data = [...rows].sort((a, b) => a.stake - b.stake);
   const maxStake = Math.max(...data.map((r) => r.stake), 1);
-  // Headroom so right-side labels never clip (especially fullscreen wide panes)
-  const xMax = maxStake * 1.28;
+  // Headroom so right-side outside labels never clip
+  const xMax = maxStake * 1.42;
 
   return {
     backgroundColor: "transparent",
     animationDuration: 280,
+    // No visualMap / "Pending" gradient legend on bars view
+    visualMap: undefined,
     grid: {
       left: 8,
-      right: 12,
+      // Extra right pad for outside labels like "16.00 NOK · 1t"
+      right: 96,
       top: 8,
       bottom: 8,
       containLabel: true,
@@ -264,7 +278,6 @@ export function openRiskBySportOption(
         fontSize: 13,
         fontWeight: 600,
         color: chartText.strong,
-        // Full sport name — wider than old 80px truncate
         width: 120,
         overflow: "truncate",
       },
@@ -274,22 +287,25 @@ export function openRiskBySportOption(
     series: [
       {
         type: "bar",
-        data: data.map((r) => ({
+        data: data.map((r, i) => ({
           value: +r.stake.toFixed(2),
           itemStyle: {
-            color: colorForSport(r.sport),
+            // Index fallback keeps snooker/esports distinct if map misses
+            color: colorForSport(r.sport, i),
             borderRadius: [0, 6, 6, 0],
           },
         })),
-        // Cap bar thickness so 1 sport never becomes a fullscreen slab
-        barMaxWidth: 32,
+        // Cap bar thickness so 1–2 sports never become fullscreen gold slabs
+        barMaxWidth: 28,
         barMinHeight: 4,
         label: {
           show: true,
           position: "right" as const,
+          // High-contrast outside labels — never pale text on gold fill
           color: chartText.strong,
           fontSize: 12,
-          fontWeight: 600,
+          fontWeight: 700,
+          distance: 8,
           formatter: (p: unknown) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const v = Number((p as any)?.value ?? 0);
@@ -317,9 +333,9 @@ function shortOpenStatus(status: string): string {
 
 /**
  * Sport × status open-risk heatmap.
- * Sparse matrices (1 sport × 1 status) used to fill the whole pane as one
- * unreadable gold slab — cell labels now use high-contrast type, status axis
- * uses short names, and visualMap sits right (not under the chart).
+ * Callers should force bars when statuses ≤ 1 or sports ≤ 3
+ * (`preferOpenRiskBars`) — a single status column is one fat gold slab.
+ * visualMap is stake intensity only (not a "Pending" status legend).
  */
 export function riskHeatmapOption(
   matrix: {
@@ -337,6 +353,17 @@ export function riskHeatmapOption(
         textStyle: { color: chartText.empty, fontSize: 13 },
       },
     };
+  }
+  // Fail-safe: single status column → bars (never one-column gold heatmap)
+  if (preferOpenRiskBars(matrix.sports.length, matrix.statuses.length)) {
+    const bySport = new Map<string, { sport: string; stake: number; n: number }>();
+    for (const c of matrix.cells) {
+      const cur = bySport.get(c.sport) || { sport: c.sport, stake: 0, n: 0 };
+      cur.stake += c.stake;
+      cur.n += c.n;
+      bySport.set(c.sport, cur);
+    }
+    return openRiskBySportOption(Array.from(bySport.values()));
   }
   const statusLabels = matrix.statuses.map(shortOpenStatus);
   const data = matrix.cells.map((c) => [
@@ -367,8 +394,6 @@ export function riskHeatmapOption(
         return `<b>${sport}</b> · ${status}<br/><b>${fmt2(d[2])} NOK</b>${nPart}`;
       },
     },
-    // Right-side intensity scale frees bottom axis labels; containLabel keeps
-    // sport names fully visible on wide/fullscreen panes.
     grid: {
       left: 8,
       right: sparse ? 72 : 88,
@@ -404,6 +429,7 @@ export function riskHeatmapOption(
       axisTick: { show: false },
       splitArea: { show: false },
     },
+    // Stake intensity only — not a status ("Pending") legend
     visualMap: {
       min: 0,
       max: maxS,
@@ -413,10 +439,9 @@ export function riskHeatmapOption(
       top: "middle",
       itemWidth: 10,
       itemHeight: sparse ? 64 : 96,
-      text: ["High", "Low"],
+      text: ["High stake", "Low"],
       textGap: 6,
       inRange: {
-        // Darker floor so empty-ish cells stay readable; gold peak for max stake
         color: ["#243044", "#6B5A1E", "#C9A227", "#F0D060"],
       },
       textStyle: { color: chartText.strong, fontSize: 11, fontWeight: 500 },
@@ -425,7 +450,6 @@ export function riskHeatmapOption(
       {
         type: "heatmap",
         data,
-        // Keep cells from looking like one giant fill when only 1×1
         itemStyle: {
           borderColor: "rgba(8,14,26,0.85)",
           borderWidth: 2,
@@ -435,7 +459,6 @@ export function riskHeatmapOption(
           show: true,
           fontSize: sparse ? 13 : 11,
           fontWeight: 700,
-          // Dark on gold peak; light on dark floor — pick mid via formatter style
           color: "#0B1220",
           formatter: (p: unknown) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any

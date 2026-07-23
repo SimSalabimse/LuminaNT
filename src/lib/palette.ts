@@ -58,7 +58,8 @@ export const sportColors: Record<string, string> = {
   basketball: "#A67C1A",
   handball: "#D4B04A",
   cycling: "#A8B6CA",
-  snooker: "#8B95FF",
+  /** Teal — must stay distinct from esports indigo (never same gold slab) */
+  snooker: "#2DD4BF",
   golf: "#C4A035",
   hockey: "#D4B04A",
   baseball: "#7B8CFF",

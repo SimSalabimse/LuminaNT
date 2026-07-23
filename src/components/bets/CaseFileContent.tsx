@@ -18,6 +18,8 @@ import {
   activeControlSignals,
   parsePostSettlementPacket,
 } from "@/lib/phaseRadar";
+import { resolveReasoningChain } from "@/lib/resolveReasoningChain";
+import { SimpleModeCard } from "@/components/reasoning/SimpleModeCard";
 
 function parseNotesMeta(notes: string) {
   const out: {
@@ -128,12 +130,28 @@ export function CaseFileContent({ bet }: { bet: Bet }) {
   const snapshot = useDataStore((s) => s.snapshot);
   const allBets = useDataStore((s) => s.bets);
   const setView = useAppStore((s) => s.setView);
+  const simpleMode = useAppStore((s) => s.settings.simpleMode !== false);
   const drillForensic = useDataStore((s) => s.drillForensic);
   const setSelectedBetId = useDataStore((s) => s.setSelectedBetId);
   const setFilters = useDataStore((s) => s.setFilters);
   const [pack, setPack] = useState<Record<string, unknown> | null>(null);
   const [packError, setPackError] = useState<string | null>(null);
   const [packLoading, setPackLoading] = useState(false);
+
+  const reasoningChain = useMemo(
+    () =>
+      resolveReasoningChain(snapshot?.reasoning_chains, {
+        betId: bet.bet_id,
+        match: bet.match,
+        selection: bet.selection,
+        day: bet.date,
+        reasoningChainId:
+          bet.reasoning_chain_id != null
+            ? String(bet.reasoning_chain_id)
+            : null,
+      }),
+    [snapshot?.reasoning_chains, bet]
+  );
 
   /** P2 bidirectional: related open risk on same match / sport for re-trigger */
   const relatedOpen = useMemo(() => {
@@ -296,6 +314,10 @@ export function CaseFileContent({ bet }: { bet: Bet }) {
           <Badge variant="secondary">{dossier.processLabel}</Badge>
         </div>
       </div>
+
+      <Section title="0 · Reasoning (Simple Mode)">
+        <SimpleModeCard chain={reasoningChain} simpleMode={simpleMode} />
+      </Section>
 
       <Section title="1 · Ledger">
         <div className="grid sm:grid-cols-2 gap-x-4">

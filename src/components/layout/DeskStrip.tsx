@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   RefreshCw,
   Filter,
@@ -26,6 +26,13 @@ import {
   weeklyExploreQuotaChip,
 } from "@/lib/riskStatus";
 import { phaseRadarDims, sizeModeWhy } from "@/lib/phaseRadar";
+import { buildShortlistCards } from "@/lib/capital";
+import {
+  resolveReasoningChain,
+  trafficLightFromChain,
+  trafficLightLabel,
+  trafficLightTone,
+} from "@/lib/resolveReasoningChain";
 
 /**
  * Capital strip — calm, scannable, mode-dominant.
@@ -45,6 +52,25 @@ export function DeskStrip() {
   const demo = useAppStore((s) => s.settings.demoMode);
   const setView = useAppStore((s) => s.setView);
   const [secondaryOpen, setSecondaryOpen] = useState(false);
+
+  /** Optional RC chip: top recommended shortlist card with a reasoning chain */
+  const topRc = useMemo(() => {
+    if (!snapshot) return null;
+    const cards = buildShortlistCards(snapshot, allBets);
+    const top =
+      cards.find((c) => c.status === "planned") ||
+      cards.find((c) => c.status === "open") ||
+      cards[0];
+    if (!top) return null;
+    const chain = resolveReasoningChain(snapshot.reasoning_chains, {
+      betId: top.betId,
+      match: top.match,
+      selection: top.selection,
+    });
+    if (!chain) return null;
+    const light = trafficLightFromChain(chain);
+    return { chain, light, match: top.match };
+  }, [snapshot, allBets]);
 
   if (!snapshot) return null;
 
@@ -396,6 +422,32 @@ export function DeskStrip() {
           <Badge variant="warning" className="h-8 text-[10px] font-bold">
             RESEARCH_ONLY
           </Badge>
+        )}
+
+        {/* Optional ReasoningChain chip when top recommended has SSOT */}
+        {topRc && (
+          <button
+            type="button"
+            onClick={() => setView("shortlist")}
+            title={`Reasoning · ${topRc.match}\n${String(topRc.chain.summary || topRc.chain.decision || "")}`}
+            className={cn(
+              "flex flex-col items-center justify-center rounded-xl border px-3 py-2 min-w-[72px] hover:brightness-110 transition",
+              trafficLightTone(topRc.light).border,
+              trafficLightTone(topRc.light).bg
+            )}
+          >
+            <span className="text-[9px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
+              RC
+            </span>
+            <span
+              className={cn(
+                "mt-0.5 text-[11px] font-bold leading-none",
+                trafficLightTone(topRc.light).text
+              )}
+            >
+              {trafficLightLabel(topRc.light)}
+            </span>
+          </button>
         )}
 
         {/* Can bet — large, single source of truth */}

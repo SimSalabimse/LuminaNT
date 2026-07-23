@@ -170,6 +170,7 @@ pub fn load_snapshot(root: &Path) -> AppResult<TrackerSnapshot> {
         settlement_reviews: parse_jsonl(&paths::settlement_reviews_jsonl(root)),
         coverage_health: read_json_value(&paths::coverage_health_json(root)),
         deep_queue: read_json_value(&paths::deep_queue_json(root)),
+        reasoning_chains: parse_jsonl(&paths::reasoning_chains_jsonl(root)),
     })
 }
 
@@ -214,6 +215,7 @@ pub fn data_fingerprint(root: &Path) -> String {
         paths::deep_queue_json(root),
         paths::control_signals_jsonl(root),
         paths::settlement_reviews_jsonl(root),
+        paths::reasoning_chains_jsonl(root),
     ] {
         if let Ok(meta) = fs::metadata(&p) {
             let modified = meta

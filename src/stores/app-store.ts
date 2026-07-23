@@ -22,7 +22,9 @@ const defaultSettings: AppSettings = {
   aiApiKey: "",
   aiModel: defaultModelForProvider("xai"),
   demoMode: false,
-  /** D18 � opt-in; off by default */
+  /** Progressive disclosure for ReasoningChain — Simple Mode on by default */
+  simpleMode: true,
+  /** D18 — opt-in; off by default */
   notifyCoverageCritical: false,
   notifyStaleRisk: false,
 };
